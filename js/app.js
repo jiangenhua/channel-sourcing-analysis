@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== 4. 评分体系 =====
   renderScoringRubric();
   renderQualityTopTable();
+  renderCrossCatCoverageWarning();
+  initCatQualitySelect();
   initChannelRadarSelect();
 
   // ===== 5. 筛选漏斗 =====
@@ -349,6 +351,143 @@ function renderQualityTopTable() {
       <td class="num">${r.engagement != null ? r.engagement.toFixed(2) + '%' : '—'}</td>
       <td class="num">${r.total_play != null ? fmtBig(r.total_play) : '—'}</td>
       <td><span class="tier-pill" style="${tierStyle}">${tierLabel} 级</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ============ 新增: 跨类目 Top20 覆盖警告 ============
+function renderCrossCatCoverageWarning() {
+  const top20 = QUALITY_TOP.slice(0, 20);
+  const covered = new Set(top20.map((r) => r.category));
+  const allCats = Object.keys(QUALITY_TOP_BY_CAT || {});
+  const missing = allCats.filter((c) => !covered.has(c)).sort();
+
+  const setText = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  };
+  setText('cross-cat-coverage', covered.size);
+  setText('cross-cat-missing-count', missing.length);
+  const missEl = document.getElementById('cross-cat-missing-names');
+  if (missEl) {
+    missEl.innerHTML = missing.length === 0
+      ? '<em>无</em>'
+      : missing.map((c) => `<span class="font-mono text-amber-200">${c}</span>`).join(' · ');
+  }
+}
+
+// ============ 新增: 各类目质量分 Top 20 ============
+let currentQualityCat = null;
+
+function initCatQualitySelect() {
+  const sel = document.getElementById('cat-quality-select');
+  // 注意: const 声明的全局变量不会挂到 window 上, 必须用 typeof 检测
+  if (!sel || typeof QUALITY_TOP_BY_CAT === 'undefined') return;
+
+  // 按类目内 Top1 得分降序排
+  const cats = Object.entries(QUALITY_TOP_BY_CAT)
+    .map(([cat, rows]) => ({ cat, top1: rows[0]?.score || 0, count: rows.length }))
+    .sort((a, b) => b.top1 - a.top1);
+
+  // 优先选一个未出现在跨类目 Top20 的类目作为默认 (突出"补救"作用)
+  const crossCovered = new Set(QUALITY_TOP.slice(0, 20).map((r) => r.category));
+  const defaultCat =
+    cats.find((c) => !crossCovered.has(c.cat))?.cat ||
+    cats[0].cat;
+
+  sel.innerHTML = cats.map((c) => {
+    const mark = crossCovered.has(c.cat) ? '✓' : '◆';
+    const cls = crossCovered.has(c.cat) ? 'text-ink-300' : 'text-amber-300';
+    return `<option value="${c.cat}" data-covered="${crossCovered.has(c.cat) ? 1 : 0}">
+      ${mark} ${c.cat} · Top1=${c.top1.toFixed(1)} · ${c.count} 个
+    </option>`;
+  }).join('');
+  sel.value = defaultCat;
+  currentQualityCat = defaultCat;
+  sel.addEventListener('change', () => {
+    currentQualityCat = sel.value;
+    renderCatQualityTable();
+  });
+  renderCatQualityTable();
+}
+
+function renderCatQualityTable() {
+  const tbody = document.getElementById('cat-quality-tbody');
+  if (!tbody || !currentQualityCat) return;
+  const rows = QUALITY_TOP_BY_CAT[currentQualityCat] || [];
+
+  // 统计信息
+  const statsEl = document.getElementById('cat-quality-stats');
+  if (statsEl) {
+    const sCount = rows.filter((r) => r.score >= 80).length;
+    const aCount = rows.filter((r) => r.score >= 60 && r.score < 80).length;
+    const bCount = rows.filter((r) => r.score >= 40 && r.score < 60).length;
+    const cCount = rows.filter((r) => r.score < 40).length;
+    statsEl.innerHTML = `S:<b class="text-emerald-300">${sCount}</b> · A:<b class="text-amber-300">${aCount}</b> · B:<b class="text-orange-300">${bCount}</b> · C:<b class="text-rose-300">${cCount}</b>`;
+  }
+
+  // 顶部 summary 卡片: 类目内 Top1 / 平均分 / S+A 占比 / 是否在跨类目 Top20
+  const summaryEl = document.getElementById('cat-quality-summary');
+  if (summaryEl && rows.length > 0) {
+    const top1 = rows[0];
+    const avg = rows.reduce((s, r) => s + r.score, 0) / rows.length;
+    const goodCount = rows.filter((r) => r.score >= 60).length;
+    const goodPct = ((goodCount / rows.length) * 100).toFixed(0);
+    const crossCovered = QUALITY_TOP.slice(0, 20).some((r) => r.category === currentQualityCat);
+
+    summaryEl.innerHTML = `
+      <div class="glass p-3 bg-gradient-to-br from-brand-500/10 to-brand-700/5">
+        <div class="text-xs text-ink-300">类目 Top1 得分</div>
+        <div class="text-xl font-bold text-brand-300 mt-1">${top1.score.toFixed(1)}</div>
+        <div class="text-xs text-ink-300 mt-1 truncate" title="${top1.channel}">${top1.channel}</div>
+      </div>
+      <div class="glass p-3 bg-gradient-to-br from-purple-500/10 to-purple-700/5">
+        <div class="text-xs text-ink-300">类目内平均分</div>
+        <div class="text-xl font-bold text-purple-300 mt-1">${avg.toFixed(1)}</div>
+        <div class="text-xs text-ink-300 mt-1">共 ${rows.length} 个候选</div>
+      </div>
+      <div class="glass p-3 bg-gradient-to-br from-emerald-500/10 to-emerald-700/5">
+        <div class="text-xs text-ink-300">S+A 级占比</div>
+        <div class="text-xl font-bold text-emerald-300 mt-1">${goodPct}%</div>
+        <div class="text-xs text-ink-300 mt-1">${goodCount}/${rows.length} 达到 ≥60 分</div>
+      </div>
+      <div class="glass p-3 bg-gradient-to-br ${crossCovered ? 'from-emerald-500/10 to-emerald-700/5' : 'from-amber-500/15 to-rose-500/5'}">
+        <div class="text-xs text-ink-300">跨类目 Top 20 覆盖</div>
+        <div class="text-xl font-bold ${crossCovered ? 'text-emerald-300' : 'text-amber-300'} mt-1">
+          ${crossCovered ? '✓ 已覆盖' : '◆ 未覆盖'}
+        </div>
+        <div class="text-xs text-ink-300 mt-1">${crossCovered ? '该类目有 channel 进入总榜' : '该类目完全依赖本表展示'}</div>
+      </div>
+    `;
+  }
+
+  // 行渲染
+  tbody.innerHTML = rows.map((r, i) => {
+    const tier = r.score >= 80 ? 'S' : r.score >= 60 ? 'A' : r.score >= 40 ? 'B' : 'C';
+    const tierStyle = r.score >= 80
+      ? 'background:linear-gradient(90deg,#f59e0b,#ef4444);color:#fff;'
+      : r.score >= 60
+        ? 'background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.3);'
+        : r.score >= 40
+          ? 'background:rgba(251,146,60,0.2);color:#fdba74;border:1px solid rgba(251,146,60,0.3);'
+          : 'background:rgba(248,113,113,0.2);color:#fca5a5;border:1px solid rgba(248,113,113,0.3);';
+
+    const rkBadge = i < 3
+      ? `<span style="background:linear-gradient(90deg,#f59e0b,#ef4444);color:#fff;padding:2px 8px;border-radius:999px;font-weight:700">${i + 1}</span>`
+      : (i + 1).toString();
+
+    return `<tr>
+      <td class="num">${rkBadge}</td>
+      <td>${r.channel}</td>
+      <td class="num font-mono font-bold text-brand-300">${r.score.toFixed(1)}</td>
+      <td class="num">${r.res_1080p != null ? r.res_1080p.toFixed(1) + '%' : '—'}</td>
+      <td class="num">${r.dur_60s != null ? r.dur_60s.toFixed(1) + '%' : '—'}</td>
+      <td class="num">${r.video_cnt != null ? fmtInt(r.video_cnt) : '—'}</td>
+      <td class="num">${r.follower != null ? fmtBig(r.follower) : '—'}</td>
+      <td class="num">${r.engagement != null ? r.engagement.toFixed(2) + '%' : '—'}</td>
+      <td class="num">${r.like_per_100play != null ? r.like_per_100play.toFixed(2) : '—'}</td>
+      <td class="num">${r.total_play != null ? fmtBig(r.total_play) : '—'}</td>
+      <td><span class="tier-pill" style="${tierStyle}">${tier} 级</span></td>
     </tr>`;
   }).join('');
 }

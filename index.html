@@ -558,7 +558,7 @@
         </div>
       </div>
 
-      <!-- 质量分 Top 20 总榜 -->
+      <!-- 质量分 Top 20 总榜 (跨类目) -->
       <div class="glass-strong p-5 mt-5">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold text-white text-base">🏆 质量分 Top 20 总榜单 (跨类目)</h3>
@@ -582,6 +582,52 @@
               </tr>
             </thead>
             <tbody id="quality-top-tbody"></tbody>
+          </table>
+        </div>
+        <div class="mt-3 p-3 rounded-lg bg-amber-500/8 border border-amber-500/20 text-xs text-amber-100 leading-relaxed">
+          ⚠️ <strong class="text-amber-300">类目覆盖警告:</strong>
+          跨类目 Top 20 只覆盖了 <strong id="cross-cat-coverage">—</strong> 个类目,
+          其余 <strong id="cross-cat-missing-count">—</strong> 个类目 (含
+          <span id="cross-cat-missing-names">—</span>) 由于头部 channel 综合分相对较低, 没有出现在跨类目总榜中.
+          请向下查看「各类目内部 Top 20」, 避免整类被遗漏.
+        </div>
+      </div>
+
+      <!-- 📊 各类目质量分 Top 20 (NEW) -->
+      <div class="glass-strong p-5 mt-5">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <h3 class="font-semibold text-white text-base">📊 各类目质量分 Top 20</h3>
+            <div class="text-xs text-ink-300 mt-0.5">确保 20 个 unified_category 都有独立 Top 20 展示, 避免整类被忽略</div>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-ink-300">类目:</span>
+            <select id="cat-quality-select" class="bg-ink-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400 max-w-sm"></select>
+            <span class="text-ink-400" id="cat-quality-stats">—</span>
+          </div>
+        </div>
+
+        <!-- Quick stats summary -->
+        <div id="cat-quality-summary" class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3"></div>
+
+        <div class="overflow-x-auto max-h-[560px] overflow-y-auto">
+          <table class="data-table" id="cat-quality-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Channel</th>
+                <th class="num">总分</th>
+                <th class="num">1080p%</th>
+                <th class="num">60s+%</th>
+                <th class="num">视频数</th>
+                <th class="num">粉丝</th>
+                <th class="num">Engagement%</th>
+                <th class="num">Like/100Play</th>
+                <th class="num">总播放</th>
+                <th>分级</th>
+              </tr>
+            </thead>
+            <tbody id="cat-quality-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -801,9 +847,9 @@
   </footer>
 
   <!-- ============ Data + App ============ -->
-  <script src="assets/data.js"></script>
-  <script src="assets/data-top20.js"></script>
-  <script src="js/charts.js"></script>
-  <script src="js/app.js"></script>
+  <script src="assets/data.js?v=20260511c"></script>
+  <script src="assets/data-top20.js?v=20260511c"></script>
+  <script src="js/charts.js?v=20260511c"></script>
+  <script src="js/app.js?v=20260511c"></script>
 </body>
 </html>

@@ -277,6 +277,19 @@ print(f"Top 20 by quality score:")
 for i, q in enumerate(quality_scores[:20], 1):
     print(f"  #{i} {q['score']:.1f}  {q['category'][:30]:30s}  {q['channel']}")
 
+# 按类目分组的质量分 Top 20
+quality_by_cat = {}
+for q in quality_scores:
+    cat = q["category"]
+    quality_by_cat.setdefault(cat, []).append(q)
+for cat in quality_by_cat:
+    quality_by_cat[cat].sort(key=lambda x: -x["score"])
+    quality_by_cat[cat] = quality_by_cat[cat][:20]
+
+print(f"\n各类目候选 channel 数:")
+for cat in sorted(quality_by_cat.keys()):
+    print(f"  {cat:35s} {len(quality_by_cat[cat]):3d} 个 (top1 = {quality_by_cat[cat][0]['score']:.1f})")
+
 # ============ 计算 elite vs bulk 散点数据 ============
 # 规则:
 #  elite = score >= 65 AND video_cnt < 5000 AND res_1080p >= 80 (or null) AND dur_60s >= 60 (or null)
@@ -355,7 +368,7 @@ out.append("// ===== D) Top20 by follower =====")
 out.append(dump_js_block("TOP_BY_FOLLOWER", data["follower"]))
 out.append("")
 
-# QUALITY TOP
+# QUALITY TOP (cross-category)
 out.append("// ===== E) 综合质量分排行 (跨类目 Top 50) =====")
 out.append("// 公式: score = Σ(dim_score_i × weight_i), 各维度分: S=100/A=75/B=50/C=25")
 out.append("// 详见 README/REPORT.md 评分体系章节")
@@ -378,6 +391,33 @@ for q in quality_scores[:50]:
     }
     out.append(f"  {js_repr(line)},")
 out.append("];")
+out.append("")
+
+# QUALITY TOP_BY_CAT (per-category Top 20, ensures no category is omitted)
+out.append("// ===== E.2) 各类目质量分 Top 20 (确保所有 19 类目都有展示) =====")
+out.append("// 与 QUALITY_TOP 同一公式, 但按 unified_category 分组后各取 Top 20")
+out.append("const QUALITY_TOP_BY_CAT = {")
+for cat in sorted(quality_by_cat.keys()):
+    safe_cat = cat.replace('"', '\\"')
+    out.append(f'  "{safe_cat}": [')
+    for i, q in enumerate(quality_by_cat[cat], 1):
+        line = {
+            "rk": i,
+            "channel": q["channel"],
+            "score": q["score"],
+            "res_1080p": q["res_1080p"],
+            "dur_60s": q["dur_60s"],
+            "video_cnt": q["video_cnt"],
+            "follower": q["follower"],
+            "engagement": q["engagement_rate_pct"],
+            "like_per_100play": q["like_per_100play"],
+            "apf": q["avg_play_per_follower"],
+            "total_play": q["total_play"],
+            "parts": q["parts"],
+        }
+        out.append(f"    {js_repr(line)},")
+    out.append("  ],")
+out.append("};")
 out.append("")
 
 # CHANNEL_SCATTER
