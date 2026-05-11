@@ -339,6 +339,81 @@
     }
     .video-row .open-btn:hover { background: #7dc0fc; color: #080d1c; transform: translateX(2px); }
 
+    /* === Video meta chips === */
+    .video-meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 5px;
+    }
+    .video-meta .platform-chip,
+    .video-meta .res-chip,
+    .video-meta .video-rk-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      line-height: 1.4;
+    }
+    .video-meta .platform-chip {
+      background: rgba(115, 132, 163, 0.18);
+      color: #cdd6e4;
+      border: 1px solid rgba(115, 132, 163, 0.25);
+    }
+    .video-meta .platform-yt {
+      background: rgba(248, 113, 113, 0.18);
+      color: #fca5a5;
+      border-color: rgba(248, 113, 113, 0.3);
+    }
+    .video-meta .platform-bili {
+      background: rgba(125, 192, 252, 0.18);
+      color: #93c5fd;
+      border-color: rgba(125, 192, 252, 0.3);
+    }
+    .video-meta .res-chip {
+      background: rgba(34, 197, 94, 0.12);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .video-meta .res-chip-icon {
+      font-size: 8px;
+      opacity: 0.6;
+    }
+    .video-meta .video-rk-inline {
+      background: rgba(125, 192, 252, 0.08);
+      color: #7384a3;
+      border: 1px solid rgba(125, 192, 252, 0.15);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* === Resolution summary banner inside modal === */
+    #video-modal-res-summary .res-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.12);
+      color: #86efac;
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    #video-modal-res-summary .res-chip-count {
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+      padding: 0 5px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
     /* Footer pulse */
     .pulse-dot {
       width: 8px;
@@ -701,12 +776,12 @@
         <div class="flex items-start gap-3 text-xs text-ink-200 leading-relaxed">
           <div class="text-2xl leading-none">🔗</div>
           <div class="flex-1">
-            <div class="font-semibold text-white text-sm mb-1">交互说明 · Channel 名称可点击查看采样视频</div>
+            <div class="font-semibold text-white text-sm mb-1">交互说明 · Channel 名称可点击查看横屏采样视频</div>
             <div>
               下方两张 Top 20 表格中, 凡是带
               <span class="channel-link inline-block px-1.5 py-0 align-baseline">示例 channel<span class="sample-badge">10</span></span>
-              这种 <strong class="text-brand-300">下划虚线 + 渐变彩色徽章 (数字 = 采样视频数)</strong> 的 channel 名, 点击后会弹出该频道的随机采样视频列表 (含标题、URL、跳转按钮);
-              带 <span class="channel-no-sample inline-block">未采样 channel</span> 样式的 (灰色斜体 + ⊘ 标记) 表示尚未跑过 SQL 采样数据, 不可点击.
+              这种 <strong class="text-brand-300">下划虚线 + 渐变彩色徽章 (数字 = 横屏采样视频数)</strong> 的 channel 名, 点击后会弹出该频道的视频示例 (含标题、URL、<strong class="text-emerald-300">分辨率徽章</strong>、平台标签、跳转按钮);
+              带 <span class="channel-no-sample inline-block">未采样 channel</span> 样式的 (灰色斜体 + ⊘ 标记) 表示该 channel 在样本中没有横屏视频 (例如 Shorts/竖屏类目).
             </div>
             <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
               <div class="bg-emerald-500/8 border border-emerald-500/20 rounded px-2 py-1.5">
@@ -1041,12 +1116,16 @@
                 class="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/30 hover:text-white text-ink-200 flex items-center justify-center text-xl leading-none transition shrink-0">×</button>
       </div>
       <!-- summary -->
-      <div class="px-5 py-2 border-b border-white/5 text-xs text-ink-300 flex items-center justify-between bg-ink-900/40">
-        <div>共 <strong class="text-white" id="video-modal-count">0</strong> 条采样
-          <span class="text-ink-400">· 数据来源: <code class="text-brand-300">requirement_info.sample_video_url</code></span>
+      <div class="px-5 py-2 border-b border-white/5 text-xs text-ink-300 flex items-center justify-between gap-2 bg-ink-900/40 flex-wrap">
+        <div>共 <strong class="text-white" id="video-modal-count">0</strong> 条横屏采样
+          <span class="text-ink-400">· 数据来源: <code class="text-brand-300">sample_video_url</code></span>
         </div>
         <a id="video-modal-channel-link-mobile" href="#" target="_blank" rel="noopener noreferrer"
            class="md:hidden text-brand-300 hover:underline">Channel ↗</a>
+      </div>
+      <!-- resolution summary -->
+      <div id="video-modal-res-summary"
+           class="hidden px-5 py-2 border-b border-white/5 text-xs text-ink-200 bg-ink-900/30 flex items-center gap-1.5 flex-wrap">
       </div>
       <!-- body -->
       <div class="overflow-y-auto flex-1">
@@ -1061,10 +1140,10 @@
   </div>
 
   <!-- ============ Data + App ============ -->
-  <script src="assets/data.js?v=20260511f"></script>
-  <script src="assets/data-top20.js?v=20260511f"></script>
-  <script src="assets/sample-videos.js?v=20260511f"></script>
-  <script src="js/charts.js?v=20260511f"></script>
-  <script src="js/app.js?v=20260511f"></script>
+  <script src="assets/data.js?v=20260511g"></script>
+  <script src="assets/data-top20.js?v=20260511g"></script>
+  <script src="assets/sample-videos.js?v=20260511g"></script>
+  <script src="js/charts.js?v=20260511g"></script>
+  <script src="js/app.js?v=20260511g"></script>
 </body>
 </html>

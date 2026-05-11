@@ -739,17 +739,54 @@ function openVideoModal(category, channel) {
     }
   }
 
-  // 填充列表
+  // 统计 modal 顶部的 resolution 概览
+  const resMap = {};
+  samples.forEach((v) => {
+    if (v.resolution) resMap[v.resolution] = (resMap[v.resolution] || 0) + 1;
+  });
+  const resSummary = Object.entries(resMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([res, n]) => `<span class="res-chip">${escapeHtml(res)} <span class="res-chip-count">${n}</span></span>`)
+    .join('');
+  const resSummaryEl = document.getElementById('video-modal-res-summary');
+  if (resSummaryEl) {
+    if (resSummary) {
+      resSummaryEl.innerHTML = '<span class="text-ink-400 mr-1">分辨率分布:</span>' + resSummary;
+      resSummaryEl.classList.remove('hidden');
+    } else {
+      resSummaryEl.classList.add('hidden');
+    }
+  }
+
+  // 填充列表 (含 resolution + meta-info)
   const list = document.getElementById('video-modal-list');
   if (list) {
     list.innerHTML = samples.map((v) => {
       const title = escapeHtml(v.title || '<未知标题>');
-      const url   = escapeHtml(v.video_url || '#');
+      const url = escapeHtml(v.video_url || '#');
       const rawUrl = v.video_url || '';
+      // 域名 (用作 platform 徽标)
+      let platform = '';
+      try {
+        const host = new URL(v.video_url || '').hostname.toLowerCase();
+        if (host.includes('youtube')) platform = '<span class="platform-chip platform-yt">YouTube</span>';
+        else if (host.includes('bilibili')) platform = '<span class="platform-chip platform-bili">Bilibili</span>';
+        else if (host) platform = `<span class="platform-chip">${escapeHtml(host)}</span>`;
+      } catch (_) { /* invalid url - skip */ }
+      // resolution chip
+      const resChip = v.resolution
+        ? `<span class="res-chip"><span class="res-chip-icon">⬛</span>${escapeHtml(v.resolution)}</span>`
+        : '';
       return `<li class="video-row">
         <span class="video-rk">${v.rk}</span>
         <div class="flex-1 min-w-0">
           <a href="${url}" target="_blank" rel="noopener noreferrer" class="video-title">${title}</a>
+          <div class="video-meta">
+            ${platform}
+            ${resChip}
+            <span class="video-rk-inline">rk = ${v.rk}</span>
+          </div>
           <div class="video-url">${escapeHtml(rawUrl)}</div>
         </div>
         <a href="${url}" target="_blank" rel="noopener noreferrer" class="open-btn" title="新窗口打开">↗</a>
