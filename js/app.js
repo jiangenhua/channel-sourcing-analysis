@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ===== 4. 评分体系 =====
   renderScoringRubric();
+  renderQualityTopTable();
   initChannelRadarSelect();
 
   // ===== 5. 筛选漏斗 =====
@@ -104,21 +105,18 @@ function initTopRanking() {
 }
 
 function getDimData() {
-  switch (currentDim) {
-    case 'play':
-      // 把 TOP_BY_PLAY 摊平
-      return Object.entries(TOP_BY_PLAY).flatMap(([cat, list]) =>
-        list.map(r => ({ category: cat, ...r }))
-      );
-    case 'engagement':
-      return TOP_BY_ENGAGEMENT.slice();
-    case 'comment':
-      return TOP_BY_COMMENT_RATE.slice();
-    case 'follower':
-      return TOP_BY_FOLLOWER.slice();
-    default:
-      return [];
-  }
+  // 全部 4 维度都用 {category: [rows]} 结构, 摊平后返回
+  const SRC = {
+    play: TOP_BY_PLAY,
+    like: TOP_BY_LIKE,
+    comment: TOP_BY_COMMENT,
+    follower: TOP_BY_FOLLOWER,
+  };
+  const tbl = SRC[currentDim];
+  if (!tbl) return [];
+  return Object.entries(tbl).flatMap(([cat, list]) =>
+    list.map((r) => ({ ...r, category: r.unified_category || cat }))
+  );
 }
 
 function getAllCategories() {
@@ -151,75 +149,93 @@ function renderTopTable() {
   if (!thead || !tbody) return;
 
   const headersByDim = {
-    play: ['#', '类目', 'Channel', '总播放', '视频数', '1080p%', '60s+%', '180s+%', '质量'],
-    engagement: ['#', '类目', 'Channel', '总点赞', '视频数', 'Like/100Play', '1080p%', '质量'],
-    comment: ['#', '类目', 'Channel', '总评论', '视频数', 'Cmt/1kPlay', 'Cmt Share%', '类型'],
-    follower: ['#', '类目', 'Channel', '粉丝', '视频数', '总播放', 'Play/Follower', 'Engagement%'],
+    play:     ['#', '类目', 'Channel', '总播放', '视频数', '1080p%', '60s+%', '180s+%', '质量'],
+    like:     ['#', '类目', 'Channel', '总点赞', '视频数', 'Like/100Play', '1080p%', '60s+%', '质量'],
+    comment:  ['#', '类目', 'Channel', '总评论', '视频数', 'Cmt/1kPlay', 'Cmt Share%', '1080p%', '类型'],
+    follower: ['#', '类目', 'Channel', '粉丝', '视频数', '总播放', 'Play/Follower', 'Engagement%', '健康'],
   };
-  thead.innerHTML = `<tr>${headersByDim[currentDim].map(h => `<th>${h}</th>`).join('')}</tr>`;
+  thead.innerHTML = `<tr>${headersByDim[currentDim].map((h) => `<th>${h}</th>`).join('')}</tr>`;
 
   let rows = getDimData();
   if (currentCat !== '__all__') {
-    rows = rows.filter(r => r.category === currentCat);
+    rows = rows.filter((r) => r.category === currentCat);
   }
-  // 排序
-  const sortKey = { play: 'total', engagement: 'total_like', comment: 'total_comment', follower: 'follower' }[currentDim];
+  // 排序 (各维度核心字段)
+  const sortKey = {
+    play: 'total_play',
+    like: 'total_like',
+    comment: 'total_comment',
+    follower: 'follower',
+  }[currentDim];
   rows.sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
+
+  // 总行数 / 类目数显示
+  const channelCountEl = document.getElementById('top-channel-count');
+  if (channelCountEl) channelCountEl.textContent = rows.length.toLocaleString();
+  const catCountEl = document.getElementById('top-cat-count');
+  if (catCountEl) catCountEl.textContent = new Set(rows.map((r) => r.category)).size;
 
   tbody.innerHTML = rows.map((r, i) => renderRow(r, i + 1)).join('');
 }
 
 function renderRow(r, i) {
-  // 计算简单的 channel score (rough heuristic)
+  // 计算简单的 channel score (rough heuristic) - 用于"质量"列
   const score = computeQuickScore(r);
   const tone = score >= 70 ? 'tier-high' : score >= 50 ? 'tier-mid' : 'tier-low';
+  const channelName = r.author || r.channel;
+
+  const td = (cls, content) => `<td class="${cls}">${content}</td>`;
+  const numFmt = (v, suffix = '') => (v == null ? '—' : (typeof v === 'number' ? v.toFixed(2) : v) + suffix);
+  const numInt = (v) => (v == null ? '—' : fmtInt(v));
 
   switch (currentDim) {
     case 'play':
       return `<tr>
         <td class="num">${i}</td>
         <td class="font-semibold">${r.category}</td>
-        <td>${r.channel}</td>
-        <td class="num">${fmtBig(r.total)}</td>
-        <td class="num">${fmtInt(r.video_cnt)}</td>
-        <td class="num">${r.res_1080p?.toFixed?.(1) || '—'}%</td>
-        <td class="num">${r.dur_60s?.toFixed?.(1) || '—'}%</td>
-        <td class="num">${r.dur_180s?.toFixed?.(1) || '—'}%</td>
+        <td>${channelName}</td>
+        <td class="num">${fmtBig(r.total_play)}</td>
+        <td class="num">${numInt(r.video_cnt)}</td>
+        <td class="num">${numFmt(r.res_1080p, '%')}</td>
+        <td class="num">${numFmt(r.dur_60s, '%')}</td>
+        <td class="num">${numFmt(r.dur_180s, '%')}</td>
         <td>${renderQuality(score, tone)}</td>
       </tr>`;
-    case 'engagement':
+    case 'like':
       return `<tr>
         <td class="num">${i}</td>
         <td class="font-semibold">${r.category}</td>
-        <td>${r.channel}</td>
+        <td>${channelName}</td>
         <td class="num">${fmtBig(r.total_like)}</td>
-        <td class="num">${fmtInt(r.video_cnt)}</td>
-        <td class="num"><span class="text-emerald-300 font-mono">${r.like_per_100play?.toFixed?.(2) || '—'}</span></td>
-        <td class="num">${r.res_1080p?.toFixed?.(1) || '—'}%</td>
+        <td class="num">${numInt(r.video_cnt)}</td>
+        <td class="num"><span class="text-emerald-300 font-mono">${numFmt(r.like_per_100play)}</span></td>
+        <td class="num">${numFmt(r.res_1080p, '%')}</td>
+        <td class="num">${numFmt(r.dur_60s, '%')}</td>
         <td>${renderQuality(score, tone)}</td>
       </tr>`;
     case 'comment':
       return `<tr>
         <td class="num">${i}</td>
         <td class="font-semibold">${r.category}</td>
-        <td>${r.channel}</td>
+        <td>${channelName}</td>
         <td class="num">${fmtBig(r.total_comment)}</td>
-        <td class="num">${fmtInt(r.video_cnt)}</td>
-        <td class="num"><span class="text-amber-300 font-mono">${r.comment_per_1k_play?.toFixed?.(2) || '—'}</span></td>
-        <td class="num">${r.comment_share_pct?.toFixed?.(2) || '—'}%</td>
+        <td class="num">${numInt(r.video_cnt)}</td>
+        <td class="num"><span class="text-amber-300 font-mono">${numFmt(r.comment_per_1k_play)}</span></td>
+        <td class="num">${numFmt(r.comment_share_pct, '%')}</td>
+        <td class="num">${numFmt(r.res_1080p, '%')}</td>
         <td>${commentTypeLabel(r.comment_share_pct, r.comment_per_1k_play)}</td>
       </tr>`;
     case 'follower':
-      const playStr = r.total_play ? fmtBig(r.total_play) : '—';
       return `<tr>
         <td class="num">${i}</td>
         <td class="font-semibold">${r.category}</td>
-        <td>${r.channel}</td>
+        <td>${channelName}</td>
         <td class="num font-semibold text-brand-300">${fmtBig(r.follower)}</td>
-        <td class="num">${fmtInt(r.video_cnt)}</td>
-        <td class="num">${playStr}</td>
+        <td class="num">${numInt(r.video_cnt)}</td>
+        <td class="num">${r.total_play ? fmtBig(r.total_play) : '—'}</td>
         <td class="num">${followerHealthLabel(r.avg_play_per_follower)}</td>
-        <td class="num">${r.engagement_rate?.toFixed?.(2) || '—'}%</td>
+        <td class="num">${numFmt(r.engagement_rate_pct, '%')}</td>
+        <td>${renderQuality(score, tone)}</td>
       </tr>`;
   }
 }
@@ -244,58 +260,41 @@ function followerHealthLabel(v) {
   return `<span class="text-rose-300 font-mono">${pct} 沉淀</span>`;
 }
 
-// 粗暴打分: 各维度可得分项加和
+// 粗暴打分: 与 Python parser 中的 compute_quality_score 一致 (S=100/A=75/B=50/C=25 × 权重)
 function computeQuickScore(r) {
-  let score = 0;
-  // 分辨率
-  if (r.res_1080p != null) {
-    if (r.res_1080p >= 80) score += 20;
-    else if (r.res_1080p >= 60) score += 15;
-    else if (r.res_1080p >= 40) score += 10;
-    else score += 3;
-  } else { score += 12; }
-  // 时长 ≥60s
-  if (r.dur_60s != null) {
-    if (r.dur_60s >= 70) score += 15;
-    else if (r.dur_60s >= 50) score += 12;
-    else if (r.dur_60s >= 30) score += 6;
-  } else { score += 8; }
-  // 视频数
-  if (r.video_cnt != null) {
-    if (r.video_cnt >= 200) score += 10;
-    else if (r.video_cnt >= 50) score += 8;
-    else if (r.video_cnt >= 20) score += 4;
-  }
-  // 粉丝
-  if (r.follower != null) {
-    if (r.follower >= 100000) score += 10;
-    else if (r.follower >= 10000) score += 6;
-    else if (r.follower >= 1000) score += 3;
-  } else { score += 8; }
-  // engagement
-  if (r.engagement_rate != null) {
-    if (r.engagement_rate >= 3) score += 15;
-    else if (r.engagement_rate >= 2) score += 10;
-    else if (r.engagement_rate >= 1) score += 5;
-  } else { score += 7; }
-  // like_per_100play
-  if (r.like_per_100play != null) {
-    if (r.like_per_100play >= 5) score += 10;
-    else if (r.like_per_100play >= 3) score += 7;
-    else if (r.like_per_100play >= 1) score += 3;
-  } else { score += 5; }
-  // avg_play_per_follower
-  if (r.avg_play_per_follower != null) {
-    if (r.avg_play_per_follower >= 0.10 && r.avg_play_per_follower < 3.0) score += 10;
-    else if (r.avg_play_per_follower >= 0.03) score += 6;
-    else if (r.avg_play_per_follower > 0) score += 1;
-  } else { score += 5; }
+  const band = (v, sThr, aThr, bThr) => {
+    if (v == null) return 25;
+    if (v >= sThr) return 100;
+    if (v >= aThr) return 75;
+    if (v >= bThr) return 50;
+    return 25;
+  };
+  let s = 0;
+  s += 0.20 * band(r.res_1080p, 80, 60, 40);
+  s += 0.15 * band(r.dur_60s, 70, 50, 30);
+  s += 0.15 * band(r.engagement_rate_pct, 3, 2, 1);
+  s += 0.10 * band(r.video_cnt, 200, 50, 20);
+  s += 0.10 * band(r.follower, 100000, 10000, 1000);
+  s += 0.10 * band(r.like_per_100play, 5, 3, 1);
+  // 触达率: 0.1~3 是健康, 否则按距离扣分
+  const apf = r.avg_play_per_follower;
+  let reach = 25;
+  if (apf == null) reach = 25;
+  else if (apf >= 0.1 && apf <= 3.0) reach = 100;
+  else if ((apf >= 0.03 && apf < 0.1) || (apf > 3.0 && apf <= 10)) reach = 75;
+  else if ((apf > 0 && apf < 0.03) || (apf > 10 && apf <= 50)) reach = 50;
+  s += 0.10 * reach;
   // 类目偏好
-  const highCats = ['Travel', 'Education', 'Sports', 'Autos', 'Pets', 'Howto', 'Science', 'Food', 'Family'];
-  if (highCats.some(c => (r.category || '').includes(c))) score += 10;
-  else if ((r.category || '').includes('Entertainment') || (r.category || '').includes('Music') || (r.category || '').includes('Comedy') || (r.category || '').includes('News')) score += 6;
-  else score += 2;
-  return Math.min(100, score);
+  const cat = r.category || '';
+  const HIGH = ['Travel', 'Education', 'Sports', 'Autos', 'Pets', 'Howto', 'Science', 'Food', 'Family'];
+  const MID  = ['Entertainment', 'Music', 'Comedy', 'News', 'Nonprofits'];
+  const LOW  = ['People & Blogs', 'Gaming', 'Film & Animation'];
+  let catScore = 25;
+  if (HIGH.some((c) => cat.includes(c))) catScore = 100;
+  else if (MID.some((c) => cat.includes(c))) catScore = 75;
+  else if (LOW.some((c) => cat.includes(c))) catScore = 50;
+  s += 0.10 * catScore;
+  return Math.round(s);
 }
 
 // =====================================================
@@ -317,20 +316,56 @@ function renderScoringRubric() {
   `).join('');
 }
 
+function renderQualityTopTable() {
+  const tbody = document.getElementById('quality-top-tbody');
+  if (!tbody) return;
+  // 仅取前 20
+  const rows = QUALITY_TOP.slice(0, 20);
+  tbody.innerHTML = rows.map((r, i) => {
+    const tier = r.score >= 80 ? 'tier-high' :
+                 r.score >= 60 ? 'tier-mid' :
+                 r.score >= 40 ? 'tier-pill' : 'tier-low';
+    const tierLabel = r.score >= 80 ? 'S' : r.score >= 60 ? 'A' : r.score >= 40 ? 'B' : 'C';
+    const tierStyle = r.score >= 80
+      ? 'background:linear-gradient(90deg,#f59e0b,#ef4444);color:#fff;'
+      : r.score >= 60
+        ? 'background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.3);'
+        : r.score >= 40
+          ? 'background:rgba(251,146,60,0.2);color:#fdba74;border:1px solid rgba(251,146,60,0.3);'
+          : 'background:rgba(248,113,113,0.2);color:#fca5a5;border:1px solid rgba(248,113,113,0.3);';
+    const rkBadge = i < 3
+      ? `<span style="background:linear-gradient(90deg,#f59e0b,#ef4444);color:#fff;padding:2px 8px;border-radius:999px;font-weight:700">${i + 1}</span>`
+      : (i + 1).toString();
+
+    return `<tr>
+      <td class="num">${rkBadge}</td>
+      <td class="font-semibold">${r.category}</td>
+      <td>${r.channel}</td>
+      <td class="num font-mono font-bold text-brand-300">${r.score.toFixed(1)}</td>
+      <td class="num">${r.res_1080p != null ? r.res_1080p.toFixed(1) + '%' : '—'}</td>
+      <td class="num">${r.dur_60s != null ? r.dur_60s.toFixed(1) + '%' : '—'}</td>
+      <td class="num">${r.video_cnt != null ? fmtInt(r.video_cnt) : '—'}</td>
+      <td class="num">${r.follower != null ? fmtBig(r.follower) : '—'}</td>
+      <td class="num">${r.engagement != null ? r.engagement.toFixed(2) + '%' : '—'}</td>
+      <td class="num">${r.total_play != null ? fmtBig(r.total_play) : '—'}</td>
+      <td><span class="tier-pill" style="${tierStyle}">${tierLabel} 级</span></td>
+    </tr>`;
+  }).join('');
+}
+
 function initChannelRadarSelect() {
   const sel = document.getElementById('channel-select');
   if (!sel) return;
-  const channels = Object.keys(CHANNEL_SCORE_SAMPLES);
-  sel.innerHTML = channels.map(c => `<option value="${c}">${c}</option>`).join('');
+  // 用质量 Top 50 作为可选 channel
+  const channels = QUALITY_TOP.slice(0, 50).map((q) => q.channel);
+  sel.innerHTML = channels.map((c, i) => {
+    const q = QUALITY_TOP[i];
+    return `<option value="${c}">#${i + 1} · ${q.score.toFixed(1)} · ${c} (${q.category})</option>`;
+  }).join('');
   const update = () => {
     const c = sel.value;
     const chart = renderChannelRadar(c);
-    if (chart) {
-      // ensure registered for resize
-      if (!ChartRegistry.find(x => x.id === c)) {
-        registerChart(chart);
-      }
-    }
+    if (chart) registerChart(chart);
   };
   sel.addEventListener('change', update);
   update();

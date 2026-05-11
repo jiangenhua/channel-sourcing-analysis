@@ -285,11 +285,25 @@
 
 ---
 
-## 6. Channel 质量评分体系 (7-维 Rubric)
+## 6. Channel 质量评分体系 (8-维 Rubric)
 
-### 6.1 维度与权重
+> ⚠️ 本节是「先于 Top 榜单」的, 因为质量评分 = Top 榜单的排序依据.
 
-| 维度 | 字段 | S 级 | A 级 | B 级 | C 级 | 权重 |
+### 6.1 评分公式
+
+```
+QualityScore(channel) = Σᵢ wᵢ × band(mᵢ)
+其中 band(mᵢ) ∈ {S: 100, A: 75, B: 50, C: 25}
+```
+
+- **mᵢ**: 第 i 个维度的原始测量值 (如 1080p 占比、视频数等)
+- **band(mᵢ)**: 按维度阈值表把数值落到 S/A/B/C 四档
+- **wᵢ**: 各维度权重, ∑wᵢ = 1.0 (100%)
+- **缺失数据**: 按 C 级(25 分) 计入, 避免空值惩罚过重
+
+### 6.2 维度与权重
+
+| 维度 | 字段 | S 级 (100) | A 级 (75) | B 级 (50) | C 级 (25) | 权重 |
 | --- | --- | --- | --- | --- | --- | --- |
 | **分辨率档位** | `res_1080p_ratio_pct` | >80% | 60-80% | 40-60% | <40% | **20%** |
 | 时长合规 | `dur_60s_ratio_pct` | >70% | 50-70% | 30-50% | <30% | 15% |
@@ -297,33 +311,42 @@
 | 视频量 | `video_cnt` | >200 | 50-200 | 20-50 | <20 | 10% |
 | 粉丝规模 | `follower` | >100K | 10K-100K | 1K-10K | <1K | 10% |
 | 点赞强度 | `like_per_100play` | >5 | 3-5 | 1-3 | <1 | 10% |
-| 粉丝触达率 | `avg_play_per_follower` | 0.3-3 | 0.1-0.3 / 3-5 | 0.03-0.1 / 5-10 | <0.03 / >10 | 10% |
+| 粉丝触达率 | `avg_play_per_follower` | 0.1-3 | 0.03-0.1 / 3-10 | 0-0.03 / 10-50 | >50 | 10% |
 | 类目偏好 | `category_tier` | high (9类) | mid (5类) | low (3类) | null/short | 10% |
 
-### 6.2 评分公式
+### 6.3 总分映射 ➝ 分级
 
-```
-score = Σ (维度档位分 × 权重)
-S = 100, A = 75, B = 50, C = 25
-```
-
-最终按 score 分为四档:
 - **S 级**: score ≥ 80 → 直接入选, pretrain 第一档
 - **A 级**: 60 ≤ score < 80 → 高质量, 第二档
 - **B 级**: 40 ≤ score < 60 → 可用但需进一步打标
 - **C 级**: score < 40 → 暂不入选
 
-### 6.3 示例 channel 评分对比
+### 6.4 跨类目质量分 Top 20 总榜单 (基于 1,082 个候选 channel 计算)
 
-| Channel | 总分 | 评级 | 突出维度 | 弱项 |
+| # | 类目 | Channel | 质量分 | 评级 |
 | --- | --- | --- | --- | --- |
-| JUCA (Autos) | 87/100 | S | 1080p (99.79%), 60s+ (89%), 互动稳定 | 视频数中等 |
-| KHANDESHI MOVIES | 83/100 | S | 全 1080p, 全 60s+, 总播放高 | 视频数偏少 (207) |
-| EBS Documentary (Travel) | 78/100 | A | 视频量大, 时长合规, Travel 强类目 | 粉丝触达率一般 |
-| Toyota Motor Thailand | 74/100 | A | 视频数大, 总播放高 | 时长偏短 (60s+ 仅 35%) |
-| Mochimaru (Pets) | 76/100 | A | 全 1080p, 100% 60s+, Pets 强类目 | 粉丝量未知 |
-| PewDiePie | 70/100 | A | 头部粉丝, 高互动 | 1080p 比例偏低 |
-| Aaj Tak (News) | 56/100 | B | 粉丝多, 时长合规 | 互动率低, 触达率低 |
+| 1 | Science & Technology / 科技 | **Crazy XYZ** | 97.5 | S |
+| 2 | Comedy / 喜剧 | **Enaldinho** | 95.0 | S |
+| 3 | Comedy / 喜剧 | **Luisito Comunica** | 95.0 | S |
+| 4 | Music / 音乐 | **BANGTANTV** | 95.0 | S |
+| 5 | Science & Technology / 科技 | **MR. INDIAN HACKER** | 95.0 | S |
+| 6 | Nonprofits & Activism / 公益 | Bispo Bruno Leonardo | 92.5 | S |
+| 7 | Music / 音乐 | BLACKPINK | 88.8 | S |
+| 8 | Education / 教育 | आचार्य प्रशान्त | 87.5 | S |
+| 9 | Travel & Events / 旅行 | Zack D. Films | 86.2 | S |
+| 10 | Entertainment / 娱乐 | Alejo Igoa | 85.0 | S |
+| 11 | Gaming / 游戏 | AboFlah | 85.0 | S |
+| 12 | Howto & Style / 生活时尚 | Mikecrack | 85.0 | S |
+| 13 | News & Politics / 新闻与政治 | Dhruv Rathee | 85.0 | S |
+| 14 | Nonprofits & Activism / 公益 | TEDx Talks | 85.0 | S |
+| 15 | Sports / 体育 | Fede Vigevani | 85.0 | S |
+| 16 | Travel & Events / 旅行 | Luisito Comunica | 85.0 | S |
+| 17 | Music / 音乐 | Canal KondZilla | 83.8 | S |
+| 18 | Gaming / 游戏 | Jess No Limit | 82.5 | S |
+| 19 | Autos & Vehicles / 汽车 | Markiplier | 82.5 | S |
+| 20 | News & Politics / 新闻与政治 | Imran Riaz Khan | 81.2 | S |
+
+> 完整 Top 50 见 `assets/data-top20.js` 中的 `QUALITY_TOP` 数组, 互动看板可逐条查看八维雷达分布.
 
 ---
 
@@ -474,10 +497,22 @@ ORDER BY total_play DESC;
 
 ---
 
-> **报告版本**: v1.0, 2026-05-11
+> **报告版本**: v1.1, 2026-05-11
 >
 > **数据快照**: 2026-03-28
 >
 > **作者**: Channel Sourcing Analysis Team
 >
-> **可视化看板**: [打开 Dashboard](./index.html) · 部署在 [GitHub Pages](https://jiangenhua.github.io/channel-sourcing-analysis/)
+> **可视化资源**:
+>
+> - 主看板: [index.html](./index.html) · [GitHub Pages](https://jiangenhua.github.io/channel-sourcing-analysis/)
+> - 深度分析报告页 (含 Pareto / 异常检测 / 相关性): [analysis.html](./analysis.html) · [Live](https://jiangenhua.github.io/channel-sourcing-analysis/analysis.html)
+>
+> **v1.1 更新内容**:
+>
+> - 全量 19 类 × 20 channel × 4 维度数据 (1,082 行) 自动解析入库
+> - 八维质量评分体系 + 跨类目 Top 20 总榜单
+> - 类目分布图修复 tooltip 错位、移除质量标注 (回归纯分布)
+> - 评论分布修正 NULL 描述
+> - 散点图精品/大水号加入显式分类公式
+> - 新增「深度分析报告页」: Pareto 集中度 · 异常账号识别 · 跨维度相关性 · 三段式寻源策略

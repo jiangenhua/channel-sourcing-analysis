@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>深度数据分析 · 漫游数据源盘点</title>
+  <meta name="description" content="基于 Top20 全量数据的深度分析: 类目 × 时长 × 互动 × Pareto × Health" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E📑%3C/text%3E%3C/svg%3E" />
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            ink: {
+              50: '#f5f7fb', 100: '#e8edf5', 200: '#cdd6e4', 300: '#a3b0c7',
+              400: '#7384a3', 500: '#52617d', 600: '#3d4a63', 700: '#2b3447',
+              800: '#1c2435', 900: '#11172a', 950: '#080d1c',
+            },
+            brand: { 300: '#7dc0fc', 400: '#379ff9', 500: '#0e80e5' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root { --bg-grad: radial-gradient(ellipse at top, #0a3a65 0%, #080d1c 50%, #03060d 100%); }
+    html, body {
+      background: var(--bg-grad);
+      color: #e8edf5;
+      min-height: 100vh;
+      font-feature-settings: "tnum";
+      scroll-behavior: smooth;
+    }
+    .glass {
+      background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%);
+      backdrop-filter: blur(10px) saturate(120%);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+    }
+    .glass-strong {
+      background: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
+      backdrop-filter: blur(14px) saturate(140%);
+      border: 1px solid rgba(125, 192, 252, 0.15);
+      border-radius: 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    .gradient-text {
+      background: linear-gradient(90deg, #7dc0fc, #379ff9 30%, #c084fc 60%, #f472b6 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .chart { width: 100%; height: 380px; }
+    .chart-tall { height: 480px; }
+    .chart-xtall { height: 600px; }
+    section { scroll-margin-top: 80px; }
+
+    table.data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+    table.data-table th {
+      position: sticky; top: 0; background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(4px); padding: 10px 12px;
+      text-align: left; font-weight: 600; color: #a3b0c7; font-size: 12px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    table.data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #cdd6e4;
+    }
+    table.data-table tr:hover td { background: rgba(125, 192, 252, 0.05); color: #fff; }
+    table.data-table td.num {
+      font-family: 'JetBrains Mono', monospace;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .insight-card {
+      background: linear-gradient(135deg, rgba(125, 192, 252, 0.06) 0%, rgba(192, 132, 252, 0.04) 100%);
+      border: 1px solid rgba(125, 192, 252, 0.18);
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .hero-blob {
+      position: absolute; pointer-events: none;
+      filter: blur(80px); opacity: 0.35; z-index: 0;
+    }
+    .blob-1 { top: -10%; left: 10%; width: 380px; height: 380px; background: #0e80e5; }
+    .blob-2 { top: 20%; right: 5%; width: 460px; height: 460px; background: #c084fc; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0); }
+    ::-webkit-scrollbar-thumb { background: rgba(125, 192, 252, 0.2); border-radius: 4px; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <div class="hero-blob blob-1"></div>
+  <div class="hero-blob blob-2"></div>
+
+  <!-- ============ Header ============ -->
+  <header class="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-ink-950/70 border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-lg">📑</div>
+        <div>
+          <div class="text-sm font-semibold text-white">深度数据分析报告</div>
+          <div class="text-xs text-ink-400">Advanced Analytics · Channel Sourcing</div>
+        </div>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 text-sm">
+        <a href="index.html" class="px-3 py-1.5 hover:text-brand-300 transition flex items-center gap-1">
+          <span>← 返回主看板</span>
+        </a>
+        <a href="#takeaway"   class="px-3 py-1.5 hover:text-brand-300 transition">核心结论</a>
+        <a href="#duration"   class="px-3 py-1.5 hover:text-brand-300 transition">时长 × 类目</a>
+        <a href="#engagement" class="px-3 py-1.5 hover:text-brand-300 transition">互动结构</a>
+        <a href="#pareto"     class="px-3 py-1.5 hover:text-brand-300 transition">Pareto 集中度</a>
+        <a href="#anomaly"    class="px-3 py-1.5 hover:text-brand-300 transition">异常检测</a>
+        <a href="#strategy"   class="px-3 py-1.5 hover:text-brand-300 transition">寻源策略</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 pt-24 pb-16 relative z-10">
+
+    <!-- ====================== Hero ====================== -->
+    <section id="takeaway" class="mb-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-400/30 text-xs text-purple-200 mb-4">
+        <span class="w-1.5 h-1.5 rounded-full bg-purple-300"></span>
+        Advanced Analytics · 6 Deep Dives
+      </div>
+      <h1 class="text-3xl md:text-5xl font-bold leading-tight mb-4">
+        <span class="gradient-text">六大深度分析</span> · 从 Top20 全量样本挖掘 channel 选源规律
+      </h1>
+      <p class="text-ink-200 text-lg max-w-4xl leading-relaxed">
+        本页面在主看板基础上, 进一步从「时长结构 × 类目」「互动信号差异」「Pareto 集中度」「异常账号识别」「跨维度对比」「最终寻源策略」六个角度,
+        对 <strong class="text-brand-300">19 类 × Top20 = 1,082 个</strong> 候选 channel 进行深度分析, 输出可执行的 channel 寻源策略.
+      </p>
+
+      <!-- 6 takeaway cards -->
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">
+        <div class="insight-card">
+          <div class="text-3xl">⏱</div>
+          <div class="font-semibold text-white text-base mt-2">长尾时长结构</div>
+          <div class="text-sm text-ink-200 mt-1">News/Edu/Sci 在 ≥3min 占比上明显领先, 是高密度信息源.</div>
+        </div>
+        <div class="insight-card">
+          <div class="text-3xl">💬</div>
+          <div class="font-semibold text-white text-base mt-2">评论 ≠ 真互动</div>
+          <div class="text-sm text-ink-200 mt-1">Nonprofits 类目评论密度异常高, 多为宗教刷量, 不应等同优质.</div>
+        </div>
+        <div class="insight-card">
+          <div class="text-3xl">📐</div>
+          <div class="font-semibold text-white text-base mt-2">Pareto 极不均</div>
+          <div class="text-sm text-ink-200 mt-1">前 5% channel 贡献了 60%+ 的总播放, 寻源应聚焦头部.</div>
+        </div>
+        <div class="insight-card">
+          <div class="text-3xl">🚨</div>
+          <div class="font-semibold text-white text-base mt-2">5 类异常账号</div>
+          <div class="text-sm text-ink-200 mt-1">沉睡大号 · TV 大水号 · 宗教刷量 · Shorts 工厂 · 动画搬运.</div>
+        </div>
+        <div class="insight-card">
+          <div class="text-3xl">🔄</div>
+          <div class="font-semibold text-white text-base mt-2">跨维度对照</div>
+          <div class="text-sm text-ink-200 mt-1">高总播放 ≠ 高质量, 4 维度交叉才能找出真正的精品.</div>
+        </div>
+        <div class="insight-card">
+          <div class="text-3xl">🎯</div>
+          <div class="font-semibold text-white text-base mt-2">三段式寻源</div>
+          <div class="text-sm text-ink-200 mt-1">广撒网 → 漏斗过滤 → 八维打分 → S/A 级入库.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 1: Duration × Category ============ -->
+    <section id="duration" class="mb-12">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Deep Dive 1 · Duration × Category</div>
+          <h2 class="text-2xl font-bold text-white">时长结构 × 类目交叉分析</h2>
+        </div>
+        <div class="text-xs text-ink-400">基于 Top20 channel 的 dur_60s / dur_180s / dur_600s 占比</div>
+      </div>
+
+      <div class="glass-strong p-5 mb-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white text-base">各类目长视频占比对比 (dur_60s+, dur_180s+, dur_600s+)</h3>
+          <div class="text-xs text-ink-300">横轴 = 类目, 纵轴 = 平均占比</div>
+        </div>
+        <div id="chart-duration-by-cat" class="chart chart-tall"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="glass-strong p-5">
+          <h4 class="font-semibold text-white text-base mb-2">⏱ 时长友好类目 Top 5</h4>
+          <div class="text-xs text-ink-300 mb-2">≥60s 比例 + ≥180s 比例 加权排名</div>
+          <div id="table-dur-best" class="overflow-x-auto"></div>
+        </div>
+        <div class="glass-strong p-5">
+          <h4 class="font-semibold text-white text-base mb-2">⚠️ 短视频偏多类目 Top 5</h4>
+          <div class="text-xs text-ink-300 mb-2">≥60s 比例 &lt; 30%, 即视频多为 Shorts 形式</div>
+          <div id="table-dur-worst" class="overflow-x-auto"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 2: Engagement Signal Structure ============ -->
+    <section id="engagement" class="mb-12">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Deep Dive 2 · Engagement Structure</div>
+          <h2 class="text-2xl font-bold text-white">互动信号结构分析 · like vs comment</h2>
+        </div>
+        <div class="text-xs text-ink-400">comment_share_pct = 评论 / (评论+点赞)</div>
+      </div>
+
+      <div class="glass-strong p-5 mb-5">
+        <h3 class="font-semibold text-white text-base mb-3">like_per_100play × comment_per_1k_play 散点</h3>
+        <div id="chart-eng-scatter" class="chart chart-tall"></div>
+        <div class="text-xs text-ink-300 mt-3 leading-relaxed">
+          <strong class="text-white">阅读法:</strong>
+          <span class="text-emerald-300">左下区</span> = 低互动 / 通用类目;
+          <span class="text-amber-300">右下区</span> = 高点赞但讨论少 (情绪型/Music/Comedy);
+          <span class="text-rose-300">左上区</span> = 高评论但低点赞 (争议型/宗教/政治);
+          <span class="text-brand-300">右上区</span> = 双高 (真正高粘性, News/Edu/Sci).
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div class="insight-card">
+          <div class="font-semibold text-emerald-300 text-base mb-2">🟢 真粘性 channel (双高)</div>
+          <div class="text-xs text-ink-200 mb-2">like_per_100 &gt; 5 AND comment_per_1k &gt; 5</div>
+          <ul class="text-sm space-y-1 text-ink-100" id="list-balanced"></ul>
+        </div>
+        <div class="insight-card">
+          <div class="font-semibold text-amber-300 text-base mb-2">🟡 情绪型 (高点赞 / 低讨论)</div>
+          <div class="text-xs text-ink-200 mb-2">like &gt; 7 AND comment_share &lt; 5%</div>
+          <ul class="text-sm space-y-1 text-ink-100" id="list-emotional"></ul>
+        </div>
+        <div class="insight-card">
+          <div class="font-semibold text-rose-300 text-base mb-2">🔴 争议/刷量 (评论畸高)</div>
+          <div class="text-xs text-ink-200 mb-2">comment_per_1k &gt; 30 OR comment_share &gt; 30%</div>
+          <ul class="text-sm space-y-1 text-ink-100" id="list-suspicious"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 3: Pareto ============ -->
+    <section id="pareto" class="mb-12">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Deep Dive 3 · Concentration</div>
+          <h2 class="text-2xl font-bold text-white">Top channel Pareto 集中度</h2>
+        </div>
+        <div class="text-xs text-ink-400">头部 channel 占比 vs 总播放贡献</div>
+      </div>
+
+      <div class="glass-strong p-5 mb-5">
+        <h3 class="font-semibold text-white text-base mb-3">累计播放占比曲线 (按总播放降序)</h3>
+        <div id="chart-pareto" class="chart chart-tall"></div>
+        <div class="text-xs text-ink-300 mt-3 leading-relaxed">
+          <strong class="text-white">关键阈值:</strong>
+          头部 <strong class="text-brand-300" id="pareto-top1pct">—</strong> channel (1%) 累计贡献
+          <strong class="text-emerald-300" id="pareto-1pct-share">—</strong> 的总播放;
+          前 5% 累计 <strong class="text-emerald-300" id="pareto-5pct-share">—</strong>;
+          前 20% 累计 <strong class="text-emerald-300" id="pareto-20pct-share">—</strong>.
+          <br/>
+          <strong class="text-white">结论:</strong> 极端长尾分布 (Pareto 80/20 失效), 应聚焦 Top 1-5% 头部 channel 即可获得 50%+ 训练数据.
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">各类目 Gini 集中度系数</h3>
+          <div id="chart-gini" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">
+            ▸ Gini 越高表示该类目内 channel 之间的播放差距越大. <strong class="text-brand-300">Entertainment / News / Music</strong> 集中度极高, 需要"摘头部".
+          </div>
+        </div>
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">头部 channel 类目分布饼图</h3>
+          <div id="chart-top-cat-pie" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">
+            ▸ Top 100 channel (按总播放) 的类目占比. Entertainment / Comedy / Film 占主导, 但这是因为他们刷量大, 不是质量高.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 4: Anomaly Detection ============ -->
+    <section id="anomaly" class="mb-12">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Deep Dive 4 · Anomaly Patterns</div>
+          <h2 class="text-2xl font-bold text-white">5 类异常账号模式识别</h2>
+        </div>
+        <div class="text-xs text-ink-400">每类配对应规则 + 实际命中 channel</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="glass-strong p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg bg-rose-500/20 flex items-center justify-center text-xl">💤</div>
+            <div>
+              <div class="font-bold text-white text-base">沉睡大号</div>
+              <div class="text-xs text-ink-300">高粉丝 + 低 avg_play_per_follower</div>
+            </div>
+          </div>
+          <pre class="text-xs font-mono text-rose-200 bg-rose-500/8 rounded p-2 mb-2 whitespace-pre-wrap">follower &gt; 10M AND
+avg_play_per_follower &lt; 0.01</pre>
+          <ul class="text-sm text-ink-100 space-y-1" id="list-zombie"></ul>
+        </div>
+
+        <div class="glass-strong p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center text-xl">📺</div>
+            <div>
+              <div class="font-bold text-white text-base">TV / 新闻大水号</div>
+              <div class="text-xs text-ink-300">视频量爆炸 + 短视频比例高</div>
+            </div>
+          </div>
+          <pre class="text-xs font-mono text-amber-200 bg-amber-500/8 rounded p-2 mb-2 whitespace-pre-wrap">video_cnt &gt; 50000 AND
+dur_180s &lt; 50%</pre>
+          <ul class="text-sm text-ink-100 space-y-1" id="list-tv"></ul>
+        </div>
+
+        <div class="glass-strong p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-xl">🙏</div>
+            <div>
+              <div class="font-bold text-white text-base">宗教/争议刷量</div>
+              <div class="text-xs text-ink-300">评论密度异常高</div>
+            </div>
+          </div>
+          <pre class="text-xs font-mono text-purple-200 bg-purple-500/8 rounded p-2 mb-2 whitespace-pre-wrap">comment_per_1k_play &gt; 30 OR
+comment_share_pct &gt; 30%</pre>
+          <ul class="text-sm text-ink-100 space-y-1" id="list-religious"></ul>
+        </div>
+
+        <div class="glass-strong p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center text-xl">⚡</div>
+            <div>
+              <div class="font-bold text-white text-base">Shorts 工厂</div>
+              <div class="text-xs text-ink-300">视频量大 + 几乎全是 30s 以下</div>
+            </div>
+          </div>
+          <pre class="text-xs font-mono text-pink-200 bg-pink-500/8 rounded p-2 mb-2 whitespace-pre-wrap">video_cnt &gt; 500 AND
+dur_60s &lt; 5%</pre>
+          <ul class="text-sm text-ink-100 space-y-1" id="list-shorts"></ul>
+        </div>
+
+        <div class="glass-strong p-5 md:col-span-2">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center text-xl">🎬</div>
+            <div>
+              <div class="font-bold text-white text-base">影视/动画搬运</div>
+              <div class="text-xs text-ink-300">Film&Animation 类目 + 高总播放 + 低互动</div>
+            </div>
+          </div>
+          <pre class="text-xs font-mono text-cyan-200 bg-cyan-500/8 rounded p-2 mb-2 whitespace-pre-wrap">category = "Film & Animation" AND
+total_play &gt; 1B AND
+like_per_100play &lt; 2.0</pre>
+          <ul class="text-sm text-ink-100 space-y-1 md:grid md:grid-cols-2 md:gap-x-6" id="list-piracy"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 5: Cross-dim correlation ============ -->
+    <section id="correlation" class="mb-12">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Deep Dive 5 · Cross-Dim Correlation</div>
+          <h2 class="text-2xl font-bold text-white">跨维度相关性</h2>
+        </div>
+        <div class="text-xs text-ink-400">8 个核心指标两两 Pearson 相关</div>
+      </div>
+
+      <div class="glass-strong p-5">
+        <h3 class="font-semibold text-white text-base mb-3">指标相关性热力图</h3>
+        <div id="chart-corr" class="chart chart-tall"></div>
+        <div class="text-xs text-ink-300 mt-3 leading-relaxed">
+          <strong class="text-white">三组关键发现:</strong>
+          <ol class="list-decimal list-inside space-y-1 mt-2 text-ink-200">
+            <li><strong class="text-emerald-300">res_1080p ↔ dur_60s</strong>: 正相关 (高清的视频往往也长), 可作为 "高质量" 联合判据.</li>
+            <li><strong class="text-amber-300">video_cnt ↔ avg_play</strong>: <em>负</em>相关 (视频越多平均播放越低), 印证"少而精"原则.</li>
+            <li><strong class="text-rose-300">follower ↔ engagement_rate</strong>: 弱相关 (粉丝大不等于互动好), 二者需独立打分.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 6: Strategy ============ -->
+    <section id="strategy" class="mb-12">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Deep Dive 6 · Sourcing Strategy</div>
+          <h2 class="text-2xl font-bold text-white">三段式 channel 寻源策略</h2>
+        </div>
+        <div class="text-xs text-ink-400">从全量到 pretrain 数据池的完整 pipeline</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+        <div class="glass-strong p-5 relative overflow-hidden">
+          <div class="absolute -right-4 -top-4 text-7xl font-black text-brand-500/15">1</div>
+          <div class="font-bold text-white text-lg mb-2">阶段 1 · 类目级过滤</div>
+          <div class="text-xs text-brand-300 mb-2">Time: O(N) · Cost: 低</div>
+          <ul class="text-sm text-ink-200 space-y-2">
+            <li>✓ 保留 9 个高质量类目</li>
+            <li>✓ 整类剔除 Gaming/Film/AIGC</li>
+            <li>✓ People&Blogs 二次打标后再筛</li>
+            <li>✓ Shorts/Other 直接过滤</li>
+          </ul>
+          <div class="mt-3 pt-3 border-t border-white/10 text-xs">
+            <span class="text-ink-300">视频留存: </span><span class="text-brand-300 font-mono">18.07%</span>
+          </div>
+        </div>
+
+        <div class="glass-strong p-5 relative overflow-hidden">
+          <div class="absolute -right-4 -top-4 text-7xl font-black text-purple-500/15">2</div>
+          <div class="font-bold text-white text-lg mb-2">阶段 2 · 视频级过滤</div>
+          <div class="text-xs text-purple-300 mb-2">Time: O(N) · Cost: 中</div>
+          <ul class="text-sm text-ink-200 space-y-2">
+            <li>✓ 时长 ≥ 30s</li>
+            <li>✓ 分辨率 ≥ 720p (排除&lt;1080p 时降权)</li>
+            <li>✓ 帧率 ∈ {24, 30, 60}</li>
+            <li>✓ play_num ≥ 1K (排除冷启动)</li>
+            <li>✓ is_aigc = 0</li>
+          </ul>
+          <div class="mt-3 pt-3 border-t border-white/10 text-xs">
+            <span class="text-ink-300">视频留存: </span><span class="text-purple-300 font-mono">2.46%</span>
+          </div>
+        </div>
+
+        <div class="glass-strong p-5 relative overflow-hidden">
+          <div class="absolute -right-4 -top-4 text-7xl font-black text-pink-500/15">3</div>
+          <div class="font-bold text-white text-lg mb-2">阶段 3 · channel 级打分</div>
+          <div class="text-xs text-pink-300 mb-2">Time: O(N log N) · Cost: 高</div>
+          <ul class="text-sm text-ink-200 space-y-2">
+            <li>✓ 八维评分 (QualityScore)</li>
+            <li>✓ 异常账号识别 (5 类规则)</li>
+            <li>✓ Pareto 摘头部 Top 5%</li>
+            <li>✓ S 级直接入选, A 级抽样审核</li>
+            <li>✓ 输出 ≈ 8,424 channel</li>
+          </ul>
+          <div class="mt-3 pt-3 border-t border-white/10 text-xs">
+            <span class="text-ink-300">最终留存: </span><span class="text-pink-300 font-mono">0.0004%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-strong p-5">
+        <h3 class="font-semibold text-white text-base mb-3">📋 完整 pipeline SQL 模板</h3>
+        <pre class="text-xs leading-relaxed text-ink-200 font-mono overflow-x-auto bg-black/30 p-4 rounded-lg border border-white/5">
+<span class="text-purple-400">-- 阶段 1: 视频级过滤 + 派生字段</span>
+<span class="text-pink-400">WITH</span> filtered_videos <span class="text-pink-400">AS</span> (
+  <span class="text-pink-400">SELECT</span>
+    author,
+    unified_category,
+    play_num,
+    like_num,
+    comment_num,
+    channel_follower_count <span class="text-pink-400">AS</span> follower,
+    width,
+    height,
+    duration,
+    bit_rate,
+    frame_rate,
+    requirement_info[<span class="text-emerald-300">'is_aigc'</span>] <span class="text-pink-400">AS</span> is_aigc
+  <span class="text-pink-400">FROM</span> data_sec_management_app.dwd_hy_video_raw_acquire_data_hi
+  <span class="text-pink-400">WHERE</span> requirement_id <span class="text-pink-400">IN</span> (<span class="text-emerald-300">5148</span>, <span class="text-emerald-300">5152</span>)
+    <span class="text-pink-400">AND</span> tdbank_imp_date <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">'2026010800'</span>
+    <span class="text-pink-400">AND</span> duration <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">30</span>
+    <span class="text-pink-400">AND</span> frame_rate <span class="text-pink-400">IN</span> (<span class="text-emerald-300">24</span>, <span class="text-emerald-300">30</span>, <span class="text-emerald-300">60</span>)
+    <span class="text-pink-400">AND</span> width <span class="text-pink-400">*</span> height <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">1280 * 720</span>
+    <span class="text-pink-400">AND</span> play_num <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">1000</span>
+    <span class="text-pink-400">AND</span> COALESCE(requirement_info[<span class="text-emerald-300">'is_aigc'</span>], <span class="text-emerald-300">0</span>) <span class="text-pink-400">=</span> <span class="text-emerald-300">0</span>
+    <span class="text-pink-400">AND</span> unified_category <span class="text-pink-400">IN</span> (
+      <span class="text-emerald-300">'Travel & Events / 旅行'</span>, <span class="text-emerald-300">'Education / 教育'</span>,
+      <span class="text-emerald-300">'Sports / 体育'</span>, <span class="text-emerald-300">'Autos & Vehicles / 汽车'</span>,
+      <span class="text-emerald-300">'Pets & Animals / 宠物与动物'</span>, <span class="text-emerald-300">'Howto & Style / 生活时尚'</span>,
+      <span class="text-emerald-300">'Science & Technology / 科技'</span>, <span class="text-emerald-300">'Food / 美食'</span>,
+      <span class="text-emerald-300">'Family / 家庭'</span>
+    )
+),
+<span class="text-purple-400">-- 阶段 2: channel 维度聚合</span>
+channel_stats <span class="text-pink-400">AS</span> (
+  <span class="text-pink-400">SELECT</span>
+    author,
+    unified_category,
+    COUNT(*) <span class="text-pink-400">AS</span> video_cnt,
+    SUM(play_num) <span class="text-pink-400">AS</span> total_play,
+    MEDIAN(play_num) <span class="text-pink-400">AS</span> median_play,
+    AVG(CAST(width <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">1920</span> <span class="text-pink-400">AS</span> INT)) * <span class="text-emerald-300">100</span>  <span class="text-pink-400">AS</span> res_1080p_pct,
+    AVG(CAST(duration <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">60</span> <span class="text-pink-400">AS</span> INT)) * <span class="text-emerald-300">100</span>   <span class="text-pink-400">AS</span> dur_60s_pct,
+    AVG(CAST(duration <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">180</span> <span class="text-pink-400">AS</span> INT)) * <span class="text-emerald-300">100</span>  <span class="text-pink-400">AS</span> dur_180s_pct,
+    (SUM(like_num)<span class="text-pink-400">+</span>SUM(comment_num))*<span class="text-emerald-300">100.0</span>
+      / NULLIF(SUM(play_num), <span class="text-emerald-300">0</span>) <span class="text-pink-400">AS</span> engagement_pct,
+    SUM(like_num)*<span class="text-emerald-300">100.0</span>
+      / NULLIF(SUM(play_num), <span class="text-emerald-300">0</span>) <span class="text-pink-400">AS</span> like_per_100play,
+    AVG(play_num) <span class="text-pink-400">/</span> NULLIF(MAX(follower), <span class="text-emerald-300">0</span>) <span class="text-pink-400">AS</span> avg_play_per_follower,
+    MAX(follower) <span class="text-pink-400">AS</span> follower
+  <span class="text-pink-400">FROM</span> filtered_videos
+  <span class="text-pink-400">GROUP BY</span> author, unified_category
+),
+<span class="text-purple-400">-- 阶段 3: 八维质量评分</span>
+scored <span class="text-pink-400">AS</span> (
+  <span class="text-pink-400">SELECT</span> <span class="text-pink-400">*</span>,
+    <span class="text-emerald-300">0.20</span> <span class="text-pink-400">*</span> <span class="text-pink-400">CASE</span>
+      <span class="text-pink-400">WHEN</span> res_1080p_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">80</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">100</span>
+      <span class="text-pink-400">WHEN</span> res_1080p_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">60</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">75</span>
+      <span class="text-pink-400">WHEN</span> res_1080p_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">40</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">50</span>
+      <span class="text-pink-400">ELSE</span> <span class="text-emerald-300">25</span>
+    <span class="text-pink-400">END</span>
+    <span class="text-pink-400">+</span> <span class="text-emerald-300">0.15</span> <span class="text-pink-400">*</span> <span class="text-pink-400">CASE</span>
+      <span class="text-pink-400">WHEN</span> dur_60s_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">70</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">100</span>
+      <span class="text-pink-400">WHEN</span> dur_60s_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">50</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">75</span>
+      <span class="text-pink-400">WHEN</span> dur_60s_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">30</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">50</span>
+      <span class="text-pink-400">ELSE</span> <span class="text-emerald-300">25</span>
+    <span class="text-pink-400">END</span>
+    <span class="text-pink-400">+</span> <span class="text-emerald-300">0.15</span> <span class="text-pink-400">*</span> <span class="text-pink-400">CASE</span>
+      <span class="text-pink-400">WHEN</span> engagement_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">3</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">100</span>
+      <span class="text-pink-400">WHEN</span> engagement_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">2</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">75</span>
+      <span class="text-pink-400">WHEN</span> engagement_pct <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">1</span> <span class="text-pink-400">THEN</span> <span class="text-emerald-300">50</span>
+      <span class="text-pink-400">ELSE</span> <span class="text-emerald-300">25</span>
+    <span class="text-pink-400">END</span>
+    <span class="text-purple-400">-- ... 其余 5 个维度类似 (略, 详见 REPORT.md)</span>
+    <span class="text-pink-400">AS</span> quality_score
+  <span class="text-pink-400">FROM</span> channel_stats
+)
+<span class="text-pink-400">SELECT</span> <span class="text-pink-400">*</span>
+<span class="text-pink-400">FROM</span> scored
+<span class="text-pink-400">WHERE</span> quality_score <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">60</span>     <span class="text-purple-400">-- S/A 级</span>
+  <span class="text-pink-400">AND</span> video_cnt <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">50</span>             <span class="text-purple-400">-- 持续创作</span>
+  <span class="text-pink-400">AND</span> follower <span class="text-pink-400">&gt;=</span> <span class="text-emerald-300">10000</span>          <span class="text-purple-400">-- 行业认可</span>
+<span class="text-pink-400">ORDER BY</span> quality_score <span class="text-pink-400">DESC</span>, total_play <span class="text-pink-400">DESC</span>;</pre>
+      </div>
+    </section>
+
+    <!-- ============ Conclusion ============ -->
+    <section class="mb-8">
+      <div class="glass-strong p-7 relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-64 h-64 bg-gradient-to-br from-purple-500 to-pink-500 opacity-10 rounded-full blur-3xl"></div>
+        <h2 class="text-2xl font-bold text-white mb-5">📌 最终行动清单</h2>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div>
+            <div class="text-xs text-brand-300 mb-2 uppercase tracking-wider">立即落地 (本周)</div>
+            <ul class="text-sm text-ink-200 space-y-2">
+              <li>✓ 用三段式 SQL 跑全量, 产出 S/A 级 channel 列表 (≈ 8,424)</li>
+              <li>✓ 对接 motion / clarity pipeline, 输出视频级质量分</li>
+              <li>✓ 修正 comment_num NULL 污染口径 (实际 1K+ 比例应低于 5%)</li>
+              <li>✓ 把 5 类异常账号规则封装为 hook, 自动 flag</li>
+            </ul>
+          </div>
+          <div>
+            <div class="text-xs text-brand-300 mb-2 uppercase tracking-wider">中期优化 (下月)</div>
+            <ul class="text-sm text-ink-200 space-y-2">
+              <li>✓ 引入 obj_tags 镜头多样性评分 (航拍/手持/第一视角)</li>
+              <li>✓ 接入 channel 更新频率 / 寿命 / 近期活跃信号</li>
+              <li>✓ 对 9 个高质量类目下的 S/A 级 channel 做人工抽样审核</li>
+              <li>✓ 把八维 QualityScore 注册为 UDF, 自动化跑量</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-white/5 py-8 text-center text-xs text-ink-400">
+    <div class="max-w-7xl mx-auto px-6">
+      <div>漫游数据源盘点 · 深度分析报告 v1.0</div>
+      <div class="mt-1">
+        <a href="index.html" class="text-brand-300 hover:underline">← 返回主看板</a>
+        ·
+        <a href="REPORT.md" class="text-brand-300 hover:underline">查看完整 Markdown 报告</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============ Data + App ============ -->
+  <script src="assets/data.js"></script>
+  <script src="assets/data-top20.js"></script>
+  <script src="js/analysis.js"></script>
+</body>
+</html>

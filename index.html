@@ -269,10 +269,11 @@
         <a href="#dist"       class="px-3 py-1.5 hover:text-brand-300 transition">分布</a>
         <a href="#category"   class="px-3 py-1.5 hover:text-brand-300 transition">类目</a>
         <a href="#engagement" class="px-3 py-1.5 hover:text-brand-300 transition">互动</a>
-        <a href="#top"        class="px-3 py-1.5 hover:text-brand-300 transition">Top 榜</a>
         <a href="#scoring"    class="px-3 py-1.5 hover:text-brand-300 transition">质量评分</a>
+        <a href="#top"        class="px-3 py-1.5 hover:text-brand-300 transition">Top 榜</a>
         <a href="#funnel"     class="px-3 py-1.5 hover:text-brand-300 transition">筛选漏斗</a>
         <a href="#recommend"  class="px-3 py-1.5 hover:text-brand-300 transition">维度建议</a>
+        <a href="analysis.html" class="px-3 py-1.5 hover:text-brand-300 transition border-l border-white/10 ml-2 pl-3">📑 深度报告</a>
       </nav>
       <div class="flex items-center gap-3">
         <span class="pulse-dot"></span>
@@ -374,13 +375,11 @@
     <section id="category" class="mb-16">
       <div class="flex items-end justify-between mb-5">
         <div>
-          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">类目分析 · Category Analysis</div>
-          <h2 class="text-2xl font-bold text-white">unified_category 分布与质量分级</h2>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">类目分析 · Category Distribution</div>
+          <h2 class="text-2xl font-bold text-white">unified_category 视频量分布</h2>
         </div>
         <div class="text-xs text-ink-400">
-          <span class="tier-pill tier-high mr-1">高质量 ★</span>
-          <span class="tier-pill tier-mid mr-1">中等</span>
-          <span class="tier-pill tier-low mr-1">低优先</span>
+          数据量从大到小排序 · 单位: 视频条数
         </div>
       </div>
 
@@ -390,24 +389,24 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="glass-strong p-5">
-          <div class="text-xs text-ink-300 mb-1">⚠️ 主噪声源</div>
+          <div class="text-xs text-ink-300 mb-1">📊 最大类目</div>
           <h4 class="font-bold text-white text-lg">People &amp; Blogs 占 47.65%</h4>
           <p class="text-sm text-ink-200 mt-2 leading-relaxed">
-            该类目近一半视频质量良莠不齐, 需要二次过滤. 建议引入「场景多样性 + 物体识别置信度」做内部分级.
+            10.89 亿条视频, 占据数据池近一半. 该类目内部异质性极强 (从精美 Vlog 到自拍口播都有), 需要进入 channel 维度后再细分.
           </p>
         </div>
         <div class="glass-strong p-5">
-          <div class="text-xs text-ink-300 mb-1">⭐ 强推荐类目</div>
-          <h4 class="font-bold text-white text-lg">Travel / Edu / Sports / Sci</h4>
+          <div class="text-xs text-ink-300 mb-1">📈 头部六类</div>
+          <h4 class="font-bold text-white text-lg">前 6 类目 ≈ 85%</h4>
           <p class="text-sm text-ink-200 mt-2 leading-relaxed">
-            真实世界 + 高动态 + 信息密度高. 占比合计仅 10.83%, 但单位 channel 平均质量明显领先, ROI 最高.
+            People &amp; Blogs + Entertainment + Gaming + Music + Education + News 合计占比 ≈ 84.6%, 是数据池的主力来源.
           </p>
         </div>
         <div class="glass-strong p-5">
-          <div class="text-xs text-ink-300 mb-1">🚫 慎用类目</div>
-          <h4 class="font-bold text-white text-lg">Gaming + Film &amp; Animation</h4>
+          <div class="text-xs text-ink-300 mb-1">🔬 长尾类目</div>
+          <h4 class="font-bold text-white text-lg">Food / Family / Shorts &lt; 0.05%</h4>
           <p class="text-sm text-ink-200 mt-2 leading-relaxed">
-            屏幕录制 / 动画为主 (合计 10.3%), 不利于「真实物理 + 真实场景」世界模型学习, 应整类降权.
+            最末三类合计仅占 ≈ 0.04%, 但 Food / Family 单视频时长结构友好, 是值得"少量精挑"的来源 (见质量评分章节).
           </p>
         </div>
       </div>
@@ -457,10 +456,143 @@
       <!-- Engagement heatmap by category -->
       <div class="glass-strong p-5">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold text-white text-base">分类目互动率热力图</h3>
-          <div class="text-xs text-ink-300">单位: %, 越高越粘性 (含 NULL 噪声)</div>
+          <h3 class="font-semibold text-white text-base">分类目互动指标热力图</h3>
+          <div class="text-xs text-ink-300">基于 Top20 channel 样本聚合</div>
         </div>
         <div id="chart-engagement-heatmap" class="chart chart-tall"></div>
+
+        <!-- Heatmap detailed explanation -->
+        <div class="mt-4 grid md:grid-cols-3 gap-3 text-xs text-ink-200">
+          <div class="bg-brand-500/5 border border-brand-400/15 rounded-lg p-3">
+            <div class="font-semibold text-brand-300 mb-1">🟦 Engagement %</div>
+            <div>(SUM(like) + SUM(comment)) / SUM(play) × 100</div>
+            <div class="text-ink-300 mt-1">综合互动率, 衡量内容粘性. <strong class="text-emerald-300">2%+</strong> 健康, <strong class="text-amber-300">5%+</strong> 优质, <strong class="text-rose-300">&lt;1%</strong> 大水号.</div>
+          </div>
+          <div class="bg-purple-500/5 border border-purple-400/15 rounded-lg p-3">
+            <div class="font-semibold text-purple-300 mb-1">🟪 Likes / 100 plays</div>
+            <div>SUM(like) / SUM(play) × 100</div>
+            <div class="text-ink-300 mt-1">每 100 次播放贡献几次点赞. YouTube 一般 1~5, 爆款娱乐/喜剧能到 5~10.</div>
+          </div>
+          <div class="bg-pink-500/5 border border-pink-400/15 rounded-lg p-3">
+            <div class="font-semibold text-pink-300 mb-1">🟥 Comments / 1K plays</div>
+            <div>SUM(comment) / SUM(play) × 1000</div>
+            <div class="text-ink-300 mt-1">用户讨论度. 一般 0.5~5, News/Politics 可达 5~20, 宗教/争议刷量 &gt; 30.</div>
+          </div>
+        </div>
+        <div class="mt-3 text-xs text-ink-300 leading-relaxed">
+          <strong class="text-white">阅读方法:</strong>
+          颜色越亮 (蓝→紫→粉) 表示该类目在该指标上数值越高.
+          <strong class="text-emerald-300">Nonprofits</strong> 和 <strong class="text-emerald-300">People&amp;Blogs</strong> 在 Comments/1K 列异常突出 (&gt;40)
+          是宗教布道/争议话题刷评论的典型特征, <strong class="text-amber-300">需要在质量筛选时单独识别为噪声</strong>;
+          而 <strong class="text-emerald-300">Education / News / Science / Howto / Comedy</strong> 在三个维度上分布均衡, 是真正"高互动 + 高粘性"的优质类目.
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Quality Scoring (MOVED BEFORE TOP) ====================== -->
+    <section id="scoring" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">质量评分 · Scoring Rubric</div>
+          <h2 class="text-2xl font-bold text-white">八维 Channel 质量评分体系</h2>
+        </div>
+        <div class="text-xs text-ink-400">S / A / B / C 四档分级 · 总分 100</div>
+      </div>
+
+      <!-- 公式说明 -->
+      <div class="glass-strong p-5 mb-5 bg-gradient-to-br from-brand-500/8 to-purple-500/5">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-brand-500/30 flex items-center justify-center">∑</div>
+          <h3 class="font-semibold text-white text-base">质量分公式</h3>
+        </div>
+        <div class="font-mono text-sm bg-black/30 rounded-lg p-3 border border-white/5 mb-3">
+          <span class="text-brand-300">QualityScore</span>(channel) =
+          <span class="text-amber-300">Σ</span>
+          <span class="text-pink-300">w</span><sub class="text-pink-300">i</sub>
+          ×
+          <span class="text-emerald-300">band</span>(<span class="text-cyan-300">m</span><sub class="text-cyan-300">i</sub>)
+          &nbsp;&nbsp; <span class="text-ink-300">,&nbsp; band ∈ {S:100, A:75, B:50, C:25}</span>
+        </div>
+        <div class="grid md:grid-cols-2 gap-x-6 gap-y-2 text-sm text-ink-200">
+          <div><strong class="text-brand-300">m<sub>i</sub></strong>: 第 i 个维度的原始测量值 (如 1080p 占比、视频数等)</div>
+          <div><strong class="text-emerald-300">band(m<sub>i</sub>)</strong>: 按维度阈值表把数值落到 S/A/B/C 四档</div>
+          <div><strong class="text-pink-300">w<sub>i</sub></strong>: 各维度权重, ∑w<sub>i</sub> = 1.0 (100%)</div>
+          <div><strong class="text-amber-300">缺失数据</strong>: 按 C 级(25 分) 计入, 避免空值惩罚过重</div>
+        </div>
+        <div class="mt-3 text-sm text-ink-200">
+          <strong class="text-white">总分映射 ➝ 分级:</strong>
+          <span class="tier-pill tier-high ml-2">S 级 ≥ 80</span>
+          <span class="tier-pill tier-mid ml-1">A 级 60-80</span>
+          <span class="tier-pill ml-1" style="background:rgba(251,146,60,0.18);color:#fdba74;border:1px solid rgba(251,146,60,0.3)">B 级 40-60</span>
+          <span class="tier-pill tier-low ml-1">C 级 &lt; 40</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <div class="glass-strong p-5 lg:col-span-2">
+          <h3 class="font-semibold text-white text-base mb-3">维度权重 (雷达图)</h3>
+          <div id="chart-radar" class="chart chart-tall"></div>
+          <div class="text-xs text-ink-300 mt-2 leading-relaxed">
+            ▸ 八个维度合计权重 100%, 其中 <strong class="text-brand-300">分辨率档位 (20%)</strong> 占最高,
+            因为它直接决定了世界模型输出上限.
+          </div>
+        </div>
+        <div class="glass-strong p-5 lg:col-span-3">
+          <h3 class="font-semibold text-white text-base mb-3">维度阈值表 (S/A/B/C)</h3>
+          <div class="overflow-x-auto">
+            <table class="data-table" id="rubric-table">
+              <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>字段</th>
+                  <th>S 级</th>
+                  <th>A 级</th>
+                  <th>B 级</th>
+                  <th>C 级</th>
+                  <th class="num">权重</th>
+                </tr>
+              </thead>
+              <tbody id="rubric-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 质量分 Top 20 总榜 -->
+      <div class="glass-strong p-5 mt-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white text-base">🏆 质量分 Top 20 总榜单 (跨类目)</h3>
+          <div class="text-xs text-ink-300">基于全部 1,082 个候选 channel 计算</div>
+        </div>
+        <div class="overflow-x-auto max-h-[560px] overflow-y-auto">
+          <table class="data-table" id="quality-top-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>类目</th>
+                <th>Channel</th>
+                <th class="num">总分</th>
+                <th class="num">1080p%</th>
+                <th class="num">60s+%</th>
+                <th class="num">视频数</th>
+                <th class="num">粉丝</th>
+                <th class="num">Engagement%</th>
+                <th class="num">总播放</th>
+                <th>分级</th>
+              </tr>
+            </thead>
+            <tbody id="quality-top-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sample channel score -->
+      <div class="glass-strong p-5 mt-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white text-base">单 channel 八维评分雷达</h3>
+          <select id="channel-select" class="bg-ink-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400 max-w-md"></select>
+        </div>
+        <div id="chart-channel-radar" class="chart chart-tall"></div>
       </div>
     </section>
 
@@ -469,17 +601,22 @@
       <div class="flex items-end justify-between mb-5">
         <div>
           <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Top 榜单 · By Dimension × Category</div>
-          <h2 class="text-2xl font-bold text-white">各类目 Top Channel 排行</h2>
+          <h2 class="text-2xl font-bold text-white">各类目 Top 20 Channel 排行</h2>
         </div>
         <div class="flex items-center gap-2 text-xs">
           <div class="text-ink-300">按维度切换:</div>
           <div id="top-dim-tabs" class="flex bg-ink-800/60 rounded-lg p-1 border border-white/5">
             <button data-dim="play"       class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition active">总播放</button>
-            <button data-dim="engagement" class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">点赞率</button>
-            <button data-dim="comment"    class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">评论率</button>
+            <button data-dim="like"       class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">点赞总量</button>
+            <button data-dim="comment"    class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">评论总量</button>
             <button data-dim="follower"   class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">粉丝量</button>
           </div>
         </div>
+      </div>
+
+      <div class="text-xs text-ink-300 mb-3">
+        ▸ 覆盖 <strong class="text-brand-300" id="top-cat-count">19</strong> 个 unified_category, 每个类目 Top 20
+        · 共 <strong class="text-brand-300" id="top-channel-count">—</strong> 行
       </div>
 
       <!-- Category filter -->
@@ -505,64 +642,35 @@
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold text-white text-base">Channel 规模 vs 总播放 (精品 vs 大水号)</h3>
           <div class="text-xs text-ink-300">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 mr-1"></span>精品 channel
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-400 mr-1 ml-3"></span>大水号
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 mr-1"></span>精品 (Elite)
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-400 mr-1 ml-3"></span>大水号 (Bulk)
           </div>
         </div>
         <div id="chart-scatter" class="chart chart-tall"></div>
+        <div class="mt-3 grid md:grid-cols-2 gap-3 text-xs text-ink-200">
+          <div class="bg-emerald-500/8 border border-emerald-500/20 rounded-lg p-3">
+            <div class="font-semibold text-emerald-300 mb-1">🌟 精品 channel (Elite) 判定规则</div>
+            <pre class="font-mono text-[11px] text-emerald-100 whitespace-pre-wrap">elite ⇔
+  quality_score ≥ 65
+  AND video_cnt ≤ 5000
+  AND (res_1080p ≥ 80% 或 NULL)
+  AND (dur_60s ≥ 60% 或 NULL)</pre>
+            <div class="text-[11px] text-ink-300 mt-1">即"少而精": 视频量适中, 高清+长视频比例双高, 综合得分合格.</div>
+          </div>
+          <div class="bg-rose-500/8 border border-rose-500/20 rounded-lg p-3">
+            <div class="font-semibold text-rose-300 mb-1">⚠️ 大水号 (Bulk) 判定规则</div>
+            <pre class="font-mono text-[11px] text-rose-100 whitespace-pre-wrap">bulk ⇔
+  video_cnt &gt; 5000
+  OR quality_score &lt; 50
+  OR dur_60s &lt; 30%</pre>
+            <div class="text-[11px] text-ink-300 mt-1">即"高频低质": 视频量极大但单条质量低 (典型: 新闻台、TV 频道、Shorts 工厂).</div>
+          </div>
+        </div>
         <div class="text-xs text-ink-300 mt-2">
-          ▸ 横轴 = 单 channel 视频数, 纵轴 = 总播放. 左上区域 (少而精) 为优选 channel 特征.
+          ▸ 双对数轴: 横轴 = 单 channel 视频数 (log), 纵轴 = 总播放 (log).
+          <strong class="text-emerald-300">左上区域</strong> 为优选 channel (少视频 + 高总播放);
+          <strong class="text-rose-300">右下区域</strong> 为大水号 (多视频但平均播放低).
         </div>
-      </div>
-    </section>
-
-    <!-- ====================== Quality Scoring ====================== -->
-    <section id="scoring" class="mb-16">
-      <div class="flex items-end justify-between mb-5">
-        <div>
-          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">质量评分 · Scoring Rubric</div>
-          <h2 class="text-2xl font-bold text-white">七维 Channel 质量评分体系</h2>
-        </div>
-        <div class="text-xs text-ink-400">采用 S / A / B / C 四档分级</div>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        <div class="glass-strong p-5 lg:col-span-2">
-          <h3 class="font-semibold text-white text-base mb-3">维度权重 (雷达图)</h3>
-          <div id="chart-radar" class="chart chart-tall"></div>
-          <div class="text-xs text-ink-300 mt-2 leading-relaxed">
-            ▸ 七个维度合计权重 100%, 其中 <strong class="text-brand-300">分辨率档位 (20%)</strong> 占最高,
-            因为它直接决定了世界模型输出上限.
-          </div>
-        </div>
-        <div class="glass-strong p-5 lg:col-span-3">
-          <h3 class="font-semibold text-white text-base mb-3">维度阈值表 (S/A/B/C)</h3>
-          <div class="overflow-x-auto">
-            <table class="data-table" id="rubric-table">
-              <thead>
-                <tr>
-                  <th>维度</th>
-                  <th>字段</th>
-                  <th>S 级</th>
-                  <th>A 级</th>
-                  <th>B 级</th>
-                  <th>C 级</th>
-                  <th class="num">权重</th>
-                </tr>
-              </thead>
-              <tbody id="rubric-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sample channel score -->
-      <div class="glass-strong p-5 mt-5">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-semibold text-white text-base">示例 channel 评分对比 (从 Top20 中选取)</h3>
-          <select id="channel-select" class="bg-ink-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400"></select>
-        </div>
-        <div id="chart-channel-radar" class="chart chart-tall"></div>
       </div>
     </section>
 

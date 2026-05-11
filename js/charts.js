@@ -275,43 +275,53 @@ function renderSourceChart() {
   return chart;
 }
 
-// ============ 2. 类目分布 横向条形 ============
+// ============ 2. 类目分布 横向条形 (纯分布, 不再做质量标注) ============
 function renderCategoryChart() {
   const el = document.getElementById('chart-category');
   if (!el) return;
   const chart = echarts.init(el);
-  const data = [...CATEGORY_DIST]; // 已按 cnt 排序
-  const tierColor = COLORS.catTierColor;
+  // 关键修复: 让数据 / yAxis 顺序完全对齐, 不再 .reverse() 引起索引错位
+  // ECharts 横向条形图中, yAxis 第一个元素显示在底部.
+  // 我们希望: 占比最大显示在最上方 => yAxis 顺序需要从小到大 (倒序后的)
+  const sortedAsc = [...CATEGORY_DIST].sort((a, b) => a.ratio - b.ratio);
+
   chart.setOption({
     ...BASE_OPT,
     grid: { top: 10, left: 180, right: 90, bottom: 20, containLabel: false },
-    tooltip: { ...BASE_OPT.tooltip, trigger: 'axis', axisPointer: { type: 'shadow' },
-      formatter: p => {
-        const d = data[p[0].dataIndex];
+    tooltip: {
+      ...BASE_OPT.tooltip,
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (p) => {
+        // 这里 p[0].dataIndex 直接对应 sortedAsc 的索引, 完全一致, 不再错位
+        const d = sortedAsc[p[0].dataIndex];
         return `<b>${d.cat}</b><br/>
-                数量: <b>${fmtBig(d.cnt)}</b><br/>
-                占比: <b>${d.ratio}%</b><br/>
-                等级: <b style="color:${tierColor[d.tier]}">${d.tier.toUpperCase()}</b><br/>
-                <span style="color:#a3b0c7">${d.rec}</span>`;
+                视频数: <b>${fmtBig(d.cnt)}</b><br/>
+                占比: <b>${d.ratio}%</b>`;
       },
     },
-    xAxis: { type: 'value', ...AXIS_LINE, axisLabel: { ...AXIS_LINE.axisLabel, formatter: '{value}%' }, max: 50 },
+    xAxis: {
+      type: 'value',
+      ...AXIS_LINE,
+      axisLabel: { ...AXIS_LINE.axisLabel, formatter: '{value}%' },
+      max: 50,
+    },
     yAxis: {
       type: 'category',
-      data: data.map(d => d.cat).reverse(),
+      data: sortedAsc.map((d) => d.cat),
       ...AXIS_LINE,
       axisLabel: { ...AXIS_LINE.axisLabel, fontSize: 11, width: 170, overflow: 'truncate' },
     },
     series: [{
       type: 'bar',
-      data: [...data].reverse().map(d => ({
+      data: sortedAsc.map((d) => ({
         value: d.ratio,
         itemStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
             colorStops: [
-              { offset: 0, color: tierColor[d.tier] },
-              { offset: 1, color: tierColor[d.tier] + '60' },
+              { offset: 0, color: COLORS.primary },
+              { offset: 1, color: COLORS.primary + '50' },
             ],
           },
           borderRadius: [0, 6, 6, 0],
@@ -379,7 +389,12 @@ function renderEngagementHeatmap() {
   const el = document.getElementById('chart-engagement-heatmap');
   if (!el) return;
   const chart = echarts.init(el);
-  const cats = CATEGORY_ENGAGEMENT_AVG.map(d => d.category.replace(/\s+\/\s+.*$/, ''));
+  // 过滤掉值全为 0 的类目 (无数据), 按 engagement 排序
+  const filtered = CATEGORY_ENGAGEMENT_AVG.filter(
+    (d) => (d.avg_engagement || 0) + (d.avg_like_per_100 || 0) + (d.avg_comment_per_1k || 0) > 0
+  );
+  filtered.sort((a, b) => (b.avg_engagement || 0) - (a.avg_engagement || 0));
+  const cats = filtered.map((d) => d.category.replace(/\s+\/\s+.*$/, ''));
   const metrics = ['avg_engagement', 'avg_like_per_100', 'avg_comment_per_1k'];
   const metricLabel = {
     avg_engagement: 'Engagement %',
@@ -388,31 +403,31 @@ function renderEngagementHeatmap() {
   };
 
   const data = [];
-  CATEGORY_ENGAGEMENT_AVG.forEach((d, i) => {
+  filtered.forEach((d, i) => {
     metrics.forEach((m, j) => {
-      data.push([j, i, d[m]]);
+      data.push([j, i, +(d[m] || 0).toFixed(2)]);
     });
   });
 
   chart.setOption({
     ...BASE_OPT,
-    grid: { top: 30, left: 200, right: 80, bottom: 30, containLabel: false },
+    grid: { top: 50, left: 200, right: 80, bottom: 30, containLabel: false },
     tooltip: { ...BASE_OPT.tooltip, trigger: 'item',
       formatter: p => {
-        const d = CATEGORY_ENGAGEMENT_AVG[p.data[1]];
+        const d = filtered[p.data[1]];
         const m = metrics[p.data[0]];
-        return `<b>${d.category}</b><br/>${metricLabel[m]}: <b>${p.data[2]}</b><br/><span style="color:#a3b0c7">${d.hint}</span>`;
+        return `<b>${d.category}</b><br/>${metricLabel[m]}: <b>${p.data[2]}</b>`;
       },
     },
     xAxis: { type: 'category', data: metrics.map(m => metricLabel[m]), ...AXIS_LINE, splitArea: { show: true } },
     yAxis: { type: 'category', data: cats, ...AXIS_LINE, axisLabel: { ...AXIS_LINE.axisLabel, fontSize: 11, width: 190, overflow: 'truncate' } },
     visualMap: {
       min: 0,
-      max: 50,
+      max: 45,
       calculable: true,
       orient: 'horizontal',
       left: 'center',
-      top: 0,
+      top: 5,
       textStyle: { color: '#a3b0c7', fontSize: 11 },
       inRange: { color: ['#1c2435', '#379ff9', '#a78bfa', '#f472b6'] },
     },
@@ -432,50 +447,73 @@ function renderScatterChart() {
   const el = document.getElementById('chart-scatter');
   if (!el) return;
   const chart = echarts.init(el);
-  const elite = CHANNEL_SCATTER.filter(d => d.elite);
-  const noise = CHANNEL_SCATTER.filter(d => !d.elite);
+  const elite = CHANNEL_SCATTER.filter((d) => d.elite);
+  const noise = CHANNEL_SCATTER.filter((d) => !d.elite);
+
+  // 只对前 12 个精品 + 前 8 个大水号显示标签 (避免拥挤)
+  const eliteTopNames = new Set([...elite].sort((a, b) => b.score - a.score).slice(0, 12).map((x) => x.name));
+  const noiseTopNames = new Set([...noise].sort((a, b) => b.tplay - a.tplay).slice(0, 8).map((x) => x.name));
+
+  const makeData = (rows, topNames) =>
+    rows.map((d) => ({
+      value: [d.vcnt, d.tplay, d.name, d.cat, d.score],
+      label: { show: topNames.has(d.name) },
+    }));
 
   chart.setOption({
     ...BASE_OPT,
     grid: { top: 30, left: 70, right: 40, bottom: 50, containLabel: true },
-    tooltip: { ...BASE_OPT.tooltip, trigger: 'item',
-      formatter: p => {
-        const [v, t, name, cat] = p.data;
-        return `<b>${name}</b> · <i>${cat}</i><br/>视频数: <b>${fmtInt(v)}</b><br/>总播放: <b>${fmtBig(t)}</b>`;
+    tooltip: {
+      ...BASE_OPT.tooltip,
+      trigger: 'item',
+      formatter: (p) => {
+        const [v, t, name, cat, sc] = p.value;
+        return `<b>${name}</b> · <i>${cat}</i><br/>
+                视频数: <b>${fmtInt(v)}</b><br/>
+                总播放: <b>${fmtBig(t)}</b><br/>
+                质量分: <b style="color:${sc >= 65 ? '#4ade80' : '#f87171'}">${sc}/100</b>`;
       },
     },
     legend: { ...BASE_OPT.legend, top: 0 },
     xAxis: {
-      type: 'log', name: '视频数 (log)', nameTextStyle: { color: '#7384a3' },
+      type: 'log',
+      name: '视频数 (log)',
+      nameTextStyle: { color: '#7384a3' },
       ...AXIS_LINE,
-      axisLabel: { ...AXIS_LINE.axisLabel, formatter: v => fmtInt(v) },
+      axisLabel: { ...AXIS_LINE.axisLabel, formatter: (v) => fmtInt(v) },
     },
     yAxis: {
-      type: 'log', name: '总播放 (log)', nameTextStyle: { color: '#7384a3' },
+      type: 'log',
+      name: '总播放 (log)',
+      nameTextStyle: { color: '#7384a3' },
       ...AXIS_LINE,
-      axisLabel: { ...AXIS_LINE.axisLabel, formatter: v => fmtBig(v) },
+      axisLabel: { ...AXIS_LINE.axisLabel, formatter: (v) => fmtBig(v) },
     },
     series: [
       {
-        name: '精品 channel',
+        name: '精品 (Elite)',
         type: 'scatter',
-        data: elite.map(d => [d.vcnt, d.tplay, d.name, d.cat]),
-        symbolSize: 16,
+        data: makeData(elite, eliteTopNames),
+        symbolSize: (v) => 8 + (v[4] - 60) * 0.4,
         itemStyle: { color: COLORS.good, shadowBlur: 8, shadowColor: COLORS.good + '80' },
         label: {
-          show: true, position: 'top', color: '#a3b0c7', fontSize: 10,
-          formatter: p => p.data[2].length > 20 ? p.data[2].slice(0, 18) + '…' : p.data[2],
+          position: 'top',
+          color: '#cdd6e4',
+          fontSize: 10,
+          formatter: (p) => (p.value[2].length > 20 ? p.value[2].slice(0, 18) + '…' : p.value[2]),
         },
       },
       {
-        name: '大水号 / 高频低质',
+        name: '大水号 (Bulk)',
         type: 'scatter',
-        data: noise.map(d => [d.vcnt, d.tplay, d.name, d.cat]),
-        symbolSize: 14,
-        itemStyle: { color: COLORS.low, opacity: 0.85 },
+        data: makeData(noise, noiseTopNames),
+        symbolSize: 12,
+        itemStyle: { color: COLORS.low, opacity: 0.75 },
         label: {
-          show: true, position: 'top', color: '#7384a3', fontSize: 10,
-          formatter: p => p.data[2].length > 20 ? p.data[2].slice(0, 18) + '…' : p.data[2],
+          position: 'top',
+          color: '#7384a3',
+          fontSize: 10,
+          formatter: (p) => (p.value[2].length > 20 ? p.value[2].slice(0, 18) + '…' : p.value[2]),
         },
       },
     ],
@@ -521,41 +559,49 @@ function renderRadarChart() {
   return chart;
 }
 
-// ============ 7. Channel 评分对比 ============
-const CHANNEL_SCORE_SAMPLES = {
-  'JUCA (Autos★)':            [ 22, 17, 12, 8, 14, 12, 10, 12 ], // 精品 channel
-  'Toyota Motor Thailand':   [ 19, 8,  12, 12, 6,  3,  4,  10 ],  // 大号、互动率低
-  'KHANDESHI MOVIES':        [ 22, 15, 10, 10, 8,  4,  6,  8 ],   // 长视频神号
-  'PewDiePie':               [ 20, 13, 7,  10, 12, 8,  6,  8 ],   // 经典头部
-  'Aaj Tak (News)':          [ 17, 11, 14, 10, 4,  2,  2,  10 ],  // News 大水号
-  'EBS Documentary':         [ 18, 12, 14, 8,  10, 8,  6,  12 ],  // Travel 精品
-  'Mochimaru (Pets)':        [ 20, 14, 11, 6,  9,  6,  6,  10 ],  // Pets 精品
-};
-
+// ============ 7. Channel 评分对比 (使用真实 QUALITY_TOP 数据) ============
+// 八个维度的 max 值都是 100 (因为 band 已映射到 S=100 / A=75 / B=50 / C=25)
 function renderChannelRadar(channelName) {
   const el = document.getElementById('chart-channel-radar');
   if (!el) return;
   const chart = echarts.init(el);
-  const score = CHANNEL_SCORE_SAMPLES[channelName];
-  const indicators = QUALITY_DIMENSIONS.map(d => ({ name: d.dim, max: 25 }));
-  // 计算总分
-  const totalScore = score.reduce((a, b) => a + b, 0);
+
+  // 从 QUALITY_TOP 找到该 channel
+  const q = QUALITY_TOP.find((x) => x.channel === channelName);
+  if (!q) return null;
+
+  // 8 个维度 (与 QUALITY_DIMENSIONS 一致)
+  const labels = ['分辨率档位', '时长合规', '互动率', '视频量', '粉丝规模', '点赞强度', '粉丝触达率', '类目偏好'];
+  const keys = ['res', 'dur', 'engage', 'vcnt', 'follower', 'like_rate', 'reach', 'category'];
+  const score = keys.map((k) => q.parts[k] || 0);
+  const indicators = labels.map((name) => ({ name, max: 100 }));
 
   chart.setOption({
     ...BASE_OPT,
     title: {
-      text: `${channelName} · 综合得分: ${totalScore}/100`,
+      text: `${channelName} · 综合得分: ${q.score.toFixed(1)} / 100`,
+      subtext: q.category,
       left: 'center',
       top: 5,
       textStyle: { color: '#7dc0fc', fontSize: 14, fontWeight: 600 },
+      subtextStyle: { color: '#7384a3', fontSize: 12 },
     },
-    tooltip: { ...BASE_OPT.tooltip, trigger: 'item' },
+    tooltip: {
+      ...BASE_OPT.tooltip,
+      trigger: 'item',
+      formatter: (p) => {
+        const lines = labels.map(
+          (l, i) => `${l}: <b style="color:${score[i] >= 75 ? '#4ade80' : score[i] >= 50 ? '#facc15' : '#f87171'}">${score[i]}</b>`
+        );
+        return `<b>${channelName}</b><br/>${lines.join('<br/>')}`;
+      },
+    },
     radar: {
       shape: 'polygon',
       indicator: indicators,
       center: ['50%', '56%'],
       radius: '62%',
-      splitNumber: 5,
+      splitNumber: 4,
       axisName: { color: '#cdd6e4', fontSize: 11 },
       splitLine: { lineStyle: { color: 'rgba(125, 192, 252, 0.15)' } },
       splitArea: { areaStyle: { color: ['rgba(0,0,0,0)', 'rgba(125, 192, 252, 0.04)'] } },
@@ -570,7 +616,7 @@ function renderChannelRadar(channelName) {
         symbolSize: 7,
         lineStyle: { color: COLORS.palette[2], width: 2 },
         itemStyle: { color: COLORS.palette[2] },
-        areaStyle: { color: 'rgba(244, 114, 182, 0.25)' },
+        areaStyle: { color: 'rgba(244, 114, 182, 0.28)' },
         label: { show: true, color: '#fff', fontSize: 11 },
       }],
     }],

@@ -21,22 +21,27 @@
 
 ## 🚀 在线访问
 
-- **可视化看板**: <https://jiangenhua.github.io/channel-sourcing-analysis/>
-- **完整数据分析报告**: [`REPORT.md`](./REPORT.md)
+- **主看板**: <https://jiangenhua.github.io/channel-sourcing-analysis/>
+- **深度分析报告页**: <https://jiangenhua.github.io/channel-sourcing-analysis/analysis.html>
+- **完整 Markdown 报告**: [`REPORT.md`](./REPORT.md)
 
 ## 🗂 项目结构
 
 ```
 channel-sourcing-analysis/
-├── index.html              # 主页面 (含所有 UI 容器)
-├── REPORT.md               # 完整数据分析报告
+├── index.html              # 主看板 (KPI / 分布 / 类目 / 质量评分 / Top 榜单 / 漏斗)
+├── analysis.html           # 深度分析页 (Pareto / 异常检测 / 相关性 / 寻源策略)
+├── REPORT.md               # 完整 Markdown 数据分析报告
 ├── README.md               # 项目说明 (本文件)
+├── scripts/
+│   └── parse_top20.py      # 解析 txt → data-top20.js (含质量分计算)
 ├── assets/
-│   ├── data.js             # 总览 / 分布 / 类目 / 评分体系 数据层
-│   └── data-top20.js       # Top20 channel 数据 (按维度 × 类目)
+│   ├── data.js             # 总览 / 分布 / 类目 / 评分体系定义
+│   └── data-top20.js       # Top20 全量数据 (auto-generated, 19 类 × 20 channel × 4 维)
 └── js/
-    ├── charts.js           # ECharts 所有图表配置
-    └── app.js              # 主应用逻辑 (KPI / 表格 / 漏斗 / 筛选)
+    ├── charts.js           # 主看板 ECharts 配置
+    ├── app.js              # 主看板交互 (KPI / 质量榜 / Top 表格 / 漏斗)
+    └── analysis.js         # 深度分析页交互 (Pareto / Gini / Correlation / 异常)
 ```
 
 ## 🛠 本地开发

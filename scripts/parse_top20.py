@@ -1,0 +1,431 @@
+#!/usr/bin/env python3
+"""
+解析 4 个 Top20 txt 文件 -> 输出 assets/data-top20.js (全量 19 类 × 20 channel × 4 维度)
+"""
+import json
+import os
+import re
+import sys
+
+SRC = "/Users/ehjiang/Desktop/漫游数据源盘点/7、各obj_category下的各维度（播放、点赞、评论、订阅）top20的uploader统计分布"
+OUT = "/Users/ehjiang/Desktop/channel-sourcing-analysis/assets/data-top20.js"
+
+FILES = {
+    "play":       "a)play_num Top20 uploader.txt",
+    "like":       "b)like_num Top20 uploader.txt",
+    "comment":    "c)comment_num Top20 uploader.txt",
+    "follower":   "d)follower Top20 uploader.txt",
+}
+
+# 列名 (从原 txt 文件首行解析得到)
+COLUMNS = {
+    "play": [
+        "unified_category", "author", "total_play", "avg_play", "median_play",
+        "video_cnt", "res_720p", "res_1080p", "res_4k",
+        "dur_30s", "dur_60s", "dur_180s", "dur_600s", "rk",
+    ],
+    "like": [
+        "unified_category", "author", "total_like", "avg_like", "median_like",
+        "video_cnt", "like_per_100play", "res_720p", "res_1080p", "res_4k",
+        "dur_30s", "dur_60s", "dur_180s", "dur_600s", "rk",
+    ],
+    "comment": [
+        "unified_category", "author", "total_comment", "avg_comment", "median_comment",
+        "video_cnt", "comment_per_1k_play", "comment_share_pct",
+        "res_720p", "res_1080p", "res_4k",
+        "dur_30s", "dur_60s", "dur_180s", "dur_600s", "rk",
+    ],
+    "follower": [
+        "unified_category", "author", "follower", "video_cnt",
+        "total_play", "avg_play", "median_play",
+        "avg_play_per_follower", "engagement_rate_pct",
+        "res_720p", "res_1080p", "res_4k",
+        "dur_30s", "dur_60s", "dur_180s", "dur_600s", "rk",
+    ],
+}
+
+
+def parse_value(s, key):
+    """转换字符串为合适类型"""
+    s = s.strip()
+    if s in ("", "NULL", "null"):
+        return None
+    if key in ("unified_category", "author"):
+        return s
+    # try int first then float
+    try:
+        if "." in s or "e" in s.lower() or "E" in s:
+            return float(s)
+        return int(s)
+    except ValueError:
+        # 可能是 E7 等科学计数法
+        try:
+            return float(s)
+        except ValueError:
+            return s
+
+
+def parse_file(path, columns):
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    rows = []
+    header = lines[0].strip().split("\t")
+    # 校验列数大致一致
+    for ln in lines[1:]:
+        if not ln.strip():
+            continue
+        parts = ln.rstrip("\n").split("\t")
+        if len(parts) < len(columns):
+            # 兼容偶发的缺列
+            parts = parts + [None] * (len(columns) - len(parts))
+        elif len(parts) > len(columns):
+            parts = parts[:len(columns)]
+        row = {k: parse_value(parts[i] if parts[i] is not None else "", k) for i, k in enumerate(columns)}
+        rows.append(row)
+    return rows
+
+
+def group_by_category(rows):
+    """{category: [rows sorted by rk]}"""
+    grouped = {}
+    for r in rows:
+        cat = r.get("unified_category") or "Unknown"
+        grouped.setdefault(cat, []).append(r)
+    for cat in grouped:
+        grouped[cat].sort(key=lambda x: x.get("rk") or 9999)
+    return grouped
+
+
+# ============ 解析 4 个文件 ============
+data = {}
+for dim, fname in FILES.items():
+    path = os.path.join(SRC, fname)
+    rows = parse_file(path, COLUMNS[dim])
+    data[dim] = group_by_category(rows)
+    total_chs = sum(len(v) for v in data[dim].values())
+    print(f"[{dim}] {fname}: {len(data[dim])} 类 / {total_chs} 行")
+
+# 全量类目集合
+all_cats = sorted(set().union(*[set(d.keys()) for d in data.values()]))
+print(f"\n全量类目 ({len(all_cats)}):")
+for c in all_cats:
+    print(f"  - {c}")
+
+# ============ 写出 JS 数据文件 ============
+def js_repr(obj):
+    """简单转换 None->null, True/False->true/false, str 加引号"""
+    if obj is None:
+        return "null"
+    if obj is True:
+        return "true"
+    if obj is False:
+        return "false"
+    if isinstance(obj, str):
+        s = obj.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{s}"'
+    if isinstance(obj, (int, float)):
+        # 防止 inf
+        return repr(obj)
+    if isinstance(obj, dict):
+        items = [f"{js_repr(k)}: {js_repr(v)}" for k, v in obj.items()]
+        return "{" + ", ".join(items) + "}"
+    if isinstance(obj, list):
+        items = [js_repr(x) for x in obj]
+        return "[" + ", ".join(items) + "]"
+    return f'"{str(obj)}"'
+
+
+def dump_js_block(varname, data_by_dim):
+    """data_by_dim = {category: [row, row, ...]}"""
+    lines = [f"const {varname} = {{"]
+    for cat in sorted(data_by_dim.keys()):
+        rows = data_by_dim[cat]
+        # 类目名转义
+        safe_cat = cat.replace('"', '\\"')
+        lines.append(f'  "{safe_cat}": [')
+        for r in rows:
+            lines.append(f"    {js_repr(r)},")
+        lines.append("  ],")
+    lines.append("};")
+    return "\n".join(lines)
+
+
+# ============ 生成 综合质量分 总榜 (跨类目) ============
+# 公式: score = Σ(各维度分 × 权重)
+# 各维度 S=100, A=75, B=50, C=25 (统一映射)
+HIGH_CATS = {
+    "Travel & Events / 旅行", "Education / 教育", "Sports / 体育",
+    "Autos & Vehicles / 汽车", "Pets & Animals / 宠物与动物",
+    "Howto & Style / 生活时尚", "Science & Technology / 科技",
+    "Food / 美食", "Family / 家庭",
+}
+MID_CATS = {
+    "Entertainment / 娱乐", "Music / 音乐", "Comedy / 喜剧",
+    "News & Politics / 新闻与政治", "Nonprofits & Activism / 公益",
+}
+LOW_CATS = {
+    "People & Blogs / 人物与博客", "Gaming / 游戏",
+    "Film & Animation / 影视动画",
+}
+
+
+def score_band(value, thresholds):
+    """thresholds = [(s_thr, 100), (a_thr, 75), (b_thr, 50)] 否则 25"""
+    if value is None:
+        return 25  # 缺失数据按 C 级
+    for thr, score in thresholds:
+        if value >= thr:
+            return score
+    return 25
+
+
+def compute_quality_score(merged):
+    """
+    merged: 一个 channel 在 4 维度上的合并数据
+    keys: video_cnt, res_1080p, dur_60s, follower, engagement_rate_pct,
+          like_per_100play, avg_play_per_follower, category
+    """
+    weights = {
+        "res": 0.20,
+        "dur": 0.15,
+        "engage": 0.15,
+        "vcnt": 0.10,
+        "follower": 0.10,
+        "like_rate": 0.10,
+        "reach": 0.10,
+        "category": 0.10,
+    }
+    parts = {}
+    parts["res"]      = score_band(merged.get("res_1080p"),    [(80, 100), (60, 75), (40, 50)])
+    parts["dur"]      = score_band(merged.get("dur_60s"),       [(70, 100), (50, 75), (30, 50)])
+    parts["engage"]   = score_band(merged.get("engagement_rate_pct"),     [(3, 100), (2, 75), (1, 50)])
+    parts["vcnt"]     = score_band(merged.get("video_cnt"),     [(200, 100), (50, 75), (20, 50)])
+    parts["follower"] = score_band(merged.get("follower"),      [(100000, 100), (10000, 75), (1000, 50)])
+    parts["like_rate"]= score_band(merged.get("like_per_100play"), [(5, 100), (3, 75), (1, 50)])
+    # 触达率: 0.1~3 区间为 100, 超出按距离打折
+    apf = merged.get("avg_play_per_follower")
+    if apf is None:
+        parts["reach"] = 25
+    elif 0.1 <= apf <= 3.0:
+        parts["reach"] = 100
+    elif 0.03 <= apf < 0.1 or 3.0 < apf <= 10:
+        parts["reach"] = 75
+    elif 0 < apf < 0.03 or 10 < apf <= 50:
+        parts["reach"] = 50
+    else:
+        parts["reach"] = 25
+    # 类目偏好
+    cat = merged.get("unified_category", "")
+    if cat in HIGH_CATS:
+        parts["category"] = 100
+    elif cat in MID_CATS:
+        parts["category"] = 75
+    elif cat in LOW_CATS:
+        parts["category"] = 50
+    else:
+        parts["category"] = 25
+    total = sum(parts[k] * weights[k] for k in weights)
+    return round(total, 2), parts
+
+
+def merge_channel_rows(channel, category):
+    """把 4 个维度的同 channel 数据合并"""
+    m = {"unified_category": category, "author": channel}
+    # 取各维度第一次出现的字段值
+    for dim in ("play", "like", "comment", "follower"):
+        if category not in data[dim]:
+            continue
+        for r in data[dim][category]:
+            if r.get("author") == channel:
+                for k, v in r.items():
+                    if k not in m or m.get(k) is None:
+                        m[k] = v
+                break
+    return m
+
+
+# 收集所有 (category, channel) 组合, 计算总分
+quality_scores = []
+seen = set()
+for dim in ("play", "like", "comment", "follower"):
+    for cat, rows in data[dim].items():
+        for r in rows:
+            key = (cat, r.get("author"))
+            if key in seen:
+                continue
+            seen.add(key)
+            merged = merge_channel_rows(r.get("author"), cat)
+            score, parts = compute_quality_score(merged)
+            quality_scores.append({
+                "category": cat,
+                "channel": r.get("author"),
+                "score": score,
+                "parts": parts,
+                "res_1080p": merged.get("res_1080p"),
+                "dur_60s": merged.get("dur_60s"),
+                "video_cnt": merged.get("video_cnt"),
+                "follower": merged.get("follower"),
+                "engagement_rate_pct": merged.get("engagement_rate_pct"),
+                "like_per_100play": merged.get("like_per_100play"),
+                "avg_play_per_follower": merged.get("avg_play_per_follower"),
+                "total_play": merged.get("total_play"),
+            })
+
+quality_scores.sort(key=lambda x: -x["score"])
+print(f"\n候选 channel 总数: {len(quality_scores)}")
+print(f"Top 20 by quality score:")
+for i, q in enumerate(quality_scores[:20], 1):
+    print(f"  #{i} {q['score']:.1f}  {q['category'][:30]:30s}  {q['channel']}")
+
+# ============ 计算 elite vs bulk 散点数据 ============
+# 规则:
+#  elite = score >= 65 AND video_cnt < 5000 AND res_1080p >= 80 (or null) AND dur_60s >= 60 (or null)
+#  bulk  = video_cnt > 5000 OR (dur_60s != null AND dur_60s < 30) OR score < 50
+def classify(q):
+    if (q["video_cnt"] or 0) > 5000:
+        return "bulk"
+    if q["score"] < 50:
+        return "bulk"
+    if (q["dur_60s"] is not None and q["dur_60s"] < 30):
+        return "bulk"
+    if q["score"] >= 65:
+        return "elite"
+    return "normal"
+
+
+scatter_rows = []
+for q in quality_scores:
+    if q["video_cnt"] in (None, 0):
+        continue
+    if q["total_play"] in (None, 0):
+        continue
+    typ = classify(q)
+    if typ == "normal":
+        continue
+    scatter_rows.append({
+        "vcnt": q["video_cnt"],
+        "tplay": q["total_play"],
+        "name": q["channel"],
+        "cat": q["category"].split(" / ")[0] if " / " in q["category"] else q["category"],
+        "score": q["score"],
+        "elite": typ == "elite",
+    })
+
+# 仅保留 90 个 elite 和 60 个 bulk 用于散点
+scatter_rows.sort(key=lambda x: (-x["elite"], -x["score"]))
+elite_rows = [r for r in scatter_rows if r["elite"]][:90]
+bulk_rows  = [r for r in scatter_rows if not r["elite"]][:60]
+scatter_final = elite_rows + bulk_rows
+
+# ============ 写文件 ============
+out = []
+out.append("/**")
+out.append(" * 漫游数据源盘点 - Top20 全量数据 (按 4 维度 × 19 类目 × 各 ≤ 20 channel)")
+out.append(" * Auto-generated by scripts/parse_top20.py, do NOT edit by hand.")
+out.append(" * Source: 漫游数据源盘点/7、.../a-d txt files")
+out.append(" *")
+out.append(" * 公共字段:")
+out.append(" *   unified_category, author, video_cnt, res_720p, res_1080p, res_4k,")
+out.append(" *   dur_30s, dur_60s, dur_180s, dur_600s, rk")
+out.append(" * 各维度独有字段:")
+out.append(" *   - play:     total_play, avg_play, median_play")
+out.append(" *   - like:     total_like, avg_like, median_like, like_per_100play")
+out.append(" *   - comment:  total_comment, avg_comment, median_comment, comment_per_1k_play, comment_share_pct")
+out.append(" *   - follower: follower, total_play, avg_play, median_play, avg_play_per_follower, engagement_rate_pct")
+out.append(" */")
+out.append("")
+
+# TOP_BY_PLAY
+out.append("// ===== A) Top20 by play_num =====")
+out.append(dump_js_block("TOP_BY_PLAY", data["play"]))
+out.append("")
+
+# TOP_BY_LIKE
+out.append("// ===== B) Top20 by like_num =====")
+out.append(dump_js_block("TOP_BY_LIKE", data["like"]))
+out.append("")
+
+# TOP_BY_COMMENT
+out.append("// ===== C) Top20 by comment_num =====")
+out.append(dump_js_block("TOP_BY_COMMENT", data["comment"]))
+out.append("")
+
+# TOP_BY_FOLLOWER
+out.append("// ===== D) Top20 by follower =====")
+out.append(dump_js_block("TOP_BY_FOLLOWER", data["follower"]))
+out.append("")
+
+# QUALITY TOP
+out.append("// ===== E) 综合质量分排行 (跨类目 Top 50) =====")
+out.append("// 公式: score = Σ(dim_score_i × weight_i), 各维度分: S=100/A=75/B=50/C=25")
+out.append("// 详见 README/REPORT.md 评分体系章节")
+out.append("const QUALITY_TOP = [")
+for q in quality_scores[:50]:
+    line = {
+        "rk": quality_scores.index(q) + 1,
+        "category": q["category"],
+        "channel": q["channel"],
+        "score": q["score"],
+        "res_1080p": q["res_1080p"],
+        "dur_60s": q["dur_60s"],
+        "video_cnt": q["video_cnt"],
+        "follower": q["follower"],
+        "engagement": q["engagement_rate_pct"],
+        "like_per_100play": q["like_per_100play"],
+        "apf": q["avg_play_per_follower"],
+        "total_play": q["total_play"],
+        "parts": q["parts"],
+    }
+    out.append(f"  {js_repr(line)},")
+out.append("];")
+out.append("")
+
+# CHANNEL_SCATTER
+out.append("// ===== F) Channel 规模 vs 总播放 散点 (精品 vs 大水号) =====")
+out.append("// 分类公式:")
+out.append("//   bulk(大水号) = video_cnt > 5000  OR  score < 50  OR  (dur_60s != null AND dur_60s < 30)")
+out.append("//   elite(精品)  = score >= 65  AND  video_cnt <= 5000  AND  NOT bulk")
+out.append("const CHANNEL_SCATTER = [")
+for r in scatter_final:
+    out.append(f"  {js_repr(r)},")
+out.append("];")
+out.append("")
+
+# CATEGORY_ENGAGEMENT_AVG: 直接基于 d) 维度求每个类目 avg engagement
+cat_engagement = {}
+for cat, rows in data["follower"].items():
+    vals = [r.get("engagement_rate_pct") for r in rows if r.get("engagement_rate_pct") is not None]
+    if vals:
+        cat_engagement[cat] = sum(vals) / len(vals)
+
+# 同步推断 like/comment 平均
+cat_like = {}
+for cat, rows in data["like"].items():
+    vals = [r.get("like_per_100play") for r in rows if r.get("like_per_100play") is not None]
+    if vals:
+        cat_like[cat] = sum(vals) / len(vals)
+
+cat_comment = {}
+for cat, rows in data["comment"].items():
+    vals = [r.get("comment_per_1k_play") for r in rows if r.get("comment_per_1k_play") is not None]
+    if vals:
+        cat_comment[cat] = sum(vals) / len(vals)
+
+out.append("// ===== G) 各类目互动指标均值 (基于 Top20 样本估算) =====")
+out.append("const CATEGORY_ENGAGEMENT_AVG = [")
+for cat in sorted(set(list(cat_engagement.keys()) + list(cat_like.keys()) + list(cat_comment.keys()))):
+    line = {
+        "category": cat,
+        "avg_engagement": round(cat_engagement.get(cat, 0) or 0, 2),
+        "avg_like_per_100": round(cat_like.get(cat, 0) or 0, 2),
+        "avg_comment_per_1k": round(cat_comment.get(cat, 0) or 0, 2),
+    }
+    out.append(f"  {js_repr(line)},")
+out.append("];")
+out.append("")
+
+with open(OUT, "w", encoding="utf-8") as f:
+    f.write("\n".join(out))
+
+print(f"\n✓ 写入: {OUT}")
+print(f"  文件大小: {os.path.getsize(OUT) / 1024:.1f} KB")

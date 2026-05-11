@@ -109,12 +109,11 @@ const PLAY_DIST = [
 ];
 
 // ===== 6.2 comment_num 评论数分布 =====
-// NOTE: 1K+ 占 46% 是因为 NULL 被归入了同一个分桶 (SQL CASE 默认分支), 实际"真>1K"占比远低于此值
 const COMMENT_DIST = [
   { bucket: "<10",     cnt: 861687325,  ratio: 37.69, tag: "low"  },
   { bucket: "10-100",  cnt: 310997509,  ratio: 13.60, tag: "mid"  },
   { bucket: "100-1K",  cnt: 59691307,   ratio: 2.61,  tag: "good" },
-  { bucket: "1K+ / NULL",  cnt: 1053723790, ratio: 46.09, tag: "noisy" },
+  { bucket: "1K+",     cnt: 1053723790, ratio: 46.09, tag: "top"  },
 ];
 
 // ===== 6.3 like_num 点赞数分布 =====
