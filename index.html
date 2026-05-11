@@ -596,35 +596,66 @@
       </div>
     </section>
 
-    <!-- ====================== Quality Scoring (MOVED BEFORE TOP) ====================== -->
+    <!-- ====================== Quality Scoring (v2) ====================== -->
     <section id="scoring" class="mb-16">
       <div class="flex items-end justify-between mb-5">
         <div>
-          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">质量评分 · Scoring Rubric</div>
-          <h2 class="text-2xl font-bold text-white">八维 Channel 质量评分体系</h2>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">质量评分 · Scoring Rubric · <span class="text-amber-300">v2</span></div>
+          <h2 class="text-2xl font-bold text-white">十维 Channel 质量评分体系</h2>
         </div>
         <div class="text-xs text-ink-400">S / A / B / C 四档分级 · 总分 100</div>
+      </div>
+
+      <!-- v2 变更说明 -->
+      <div class="glass-strong p-4 mb-5 bg-gradient-to-br from-amber-500/8 to-rose-500/5">
+        <div class="flex items-start gap-3">
+          <div class="text-2xl leading-none">🔄</div>
+          <div class="flex-1 text-sm text-ink-200 leading-relaxed">
+            <div class="font-semibold text-amber-300 text-sm mb-1">v2 评分体系更新 (2026-05-11)</div>
+            <ul class="list-disc list-inside space-y-1">
+              <li><strong class="text-rose-300">删除</strong>「<span class="line-through">粉丝触达率</span>」「<span class="line-through">类目偏好</span>」(避免对 channel 类目的领域偏置)</li>
+              <li><strong class="text-emerald-300">新增</strong>「<strong>横屏比例</strong>」(10%): 横屏 → S 级, 竖屏 → C 级 (世界模型主流输出格式偏好)</li>
+              <li><strong class="text-emerald-300">新增</strong> 4 个绝对值维度 (Σ=20%): 总播放 7% · 总点赞 6% · 总评论 4% · 订阅 3%</li>
+              <li class="text-ink-300"><strong>说明</strong>: channel 级横屏比例当前为按类目估算 (Shorts 5% / Gaming&Film 95% / 多数类目 70-90%), 可后续替换为真实 SQL 输出</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <!-- 公式说明 -->
       <div class="glass-strong p-5 mb-5 bg-gradient-to-br from-brand-500/8 to-purple-500/5">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-8 h-8 rounded-lg bg-brand-500/30 flex items-center justify-center">∑</div>
-          <h3 class="font-semibold text-white text-base">质量分公式</h3>
+          <h3 class="font-semibold text-white text-base">质量分公式 (v2 · 10 维)</h3>
         </div>
         <div class="font-mono text-sm bg-black/30 rounded-lg p-3 border border-white/5 mb-3">
           <span class="text-brand-300">QualityScore</span>(channel) =
-          <span class="text-amber-300">Σ</span>
+          <span class="text-amber-300">Σ</span><sub class="text-amber-300">i=1..10</sub>
           <span class="text-pink-300">w</span><sub class="text-pink-300">i</sub>
           ×
           <span class="text-emerald-300">band</span>(<span class="text-cyan-300">m</span><sub class="text-cyan-300">i</sub>)
           &nbsp;&nbsp; <span class="text-ink-300">,&nbsp; band ∈ {S:100, A:75, B:50, C:25}</span>
         </div>
+        <div class="font-mono text-xs bg-black/30 rounded-lg p-3 border border-white/5 mb-3 text-ink-100 leading-relaxed">
+          QualityScore =
+          0.20·<span class="text-emerald-300">band</span>(res_1080p)
+          + 0.10·<span class="text-emerald-300">band</span>(horizontal)
+          + 0.15·<span class="text-emerald-300">band</span>(dur_60s)
+          + 0.15·<span class="text-emerald-300">band</span>(engagement)
+          + 0.10·<span class="text-emerald-300">band</span>(video_cnt)
+          + 0.10·<span class="text-emerald-300">band</span>(like_per_100play)
+          <br/>
+          &nbsp;&nbsp;
+          + <span class="text-amber-300">0.07</span>·<span class="text-emerald-300">band</span>(total_play)
+          + <span class="text-amber-300">0.06</span>·<span class="text-emerald-300">band</span>(total_like)
+          + <span class="text-amber-300">0.04</span>·<span class="text-emerald-300">band</span>(total_comment)
+          + <span class="text-amber-300">0.03</span>·<span class="text-emerald-300">band</span>(follower)
+        </div>
         <div class="grid md:grid-cols-2 gap-x-6 gap-y-2 text-sm text-ink-200">
-          <div><strong class="text-brand-300">m<sub>i</sub></strong>: 第 i 个维度的原始测量值 (如 1080p 占比、视频数等)</div>
+          <div><strong class="text-brand-300">m<sub>i</sub></strong>: 第 i 个维度的原始测量值</div>
           <div><strong class="text-emerald-300">band(m<sub>i</sub>)</strong>: 按维度阈值表把数值落到 S/A/B/C 四档</div>
           <div><strong class="text-pink-300">w<sub>i</sub></strong>: 各维度权重, ∑w<sub>i</sub> = 1.0 (100%)</div>
-          <div><strong class="text-amber-300">缺失数据</strong>: 按 C 级(25 分) 计入, 避免空值惩罚过重</div>
+          <div><strong class="text-amber-300">缺失数据</strong>: 按 C 级 (25 分) 计入, 避免空值惩罚过重</div>
         </div>
         <div class="mt-3 text-sm text-ink-200">
           <strong class="text-white">总分映射 ➝ 分级:</strong>
@@ -776,7 +807,7 @@
       <!-- Sample channel score -->
       <div class="glass-strong p-5 mt-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-semibold text-white text-base">单 channel 八维评分雷达</h3>
+          <h3 class="font-semibold text-white text-base">单 channel 十维评分雷达</h3>
           <select id="channel-select" class="bg-ink-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400 max-w-md"></select>
         </div>
         <div id="chart-channel-radar" class="chart chart-tall"></div>
@@ -1030,10 +1061,10 @@
   </div>
 
   <!-- ============ Data + App ============ -->
-  <script src="assets/data.js?v=20260511e"></script>
-  <script src="assets/data-top20.js?v=20260511e"></script>
-  <script src="assets/sample-videos.js?v=20260511e"></script>
-  <script src="js/charts.js?v=20260511e"></script>
-  <script src="js/app.js?v=20260511e"></script>
+  <script src="assets/data.js?v=20260511f"></script>
+  <script src="assets/data-top20.js?v=20260511f"></script>
+  <script src="assets/sample-videos.js?v=20260511f"></script>
+  <script src="js/charts.js?v=20260511f"></script>
+  <script src="js/app.js?v=20260511f"></script>
 </body>
 </html>

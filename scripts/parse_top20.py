@@ -151,21 +151,51 @@ def dump_js_block(varname, data_by_dim):
 
 
 # ============ 生成 综合质量分 总榜 (跨类目) ============
-# 公式: score = Σ(各维度分 × 权重)
+# v2 评分体系 (10 维, 总权重 100%):
+#   - 去除: 粉丝触达率 (reach) · 类目偏好 (category) · 旧的粉丝规模 band
+#   - 新增: 横屏比例 (horizontal) + 4 个绝对值维度 (play/like/comment/follower)
+#
 # 各维度 S=100, A=75, B=50, C=25 (统一映射)
-HIGH_CATS = {
-    "Travel & Events / 旅行", "Education / 教育", "Sports / 体育",
-    "Autos & Vehicles / 汽车", "Pets & Animals / 宠物与动物",
-    "Howto & Style / 生活时尚", "Science & Technology / 科技",
-    "Food / 美食", "Family / 家庭",
+WEIGHTS_V2 = {
+    "res":          0.20,  # 分辨率档位 (1080p+)
+    "horizontal":   0.10,  # 横屏比例 (NEW, 类目估算)
+    "dur":          0.15,  # 时长 ≥60s 比例
+    "engage":       0.15,  # 综合互动率
+    "vcnt":         0.10,  # 视频量
+    "like_rate":    0.10,  # 点赞强度 (like/100play)
+    # 4 个绝对值维度, 合计 20%
+    "play_abs":     0.07,  # 总播放绝对值
+    "like_abs":     0.06,  # 总点赞绝对值
+    "comment_abs":  0.04,  # 总评论绝对值
+    "follower_abs": 0.03,  # 订阅数绝对值
 }
-MID_CATS = {
-    "Entertainment / 娱乐", "Music / 音乐", "Comedy / 喜剧",
-    "News & Politics / 新闻与政治", "Nonprofits & Activism / 公益",
-}
-LOW_CATS = {
-    "People & Blogs / 人物与博客", "Gaming / 游戏",
-    "Film & Animation / 影视动画",
+assert abs(sum(WEIGHTS_V2.values()) - 1.0) < 1e-6, "权重之和必须等于 1.0"
+
+
+# 横屏比例的类目估算 (因为 channel 级 horizontal_ratio 没有直接 SQL 输出)
+# 基线来自 PDF 的全量分布 + 行业经验. 后续若有更精确 SQL 可替换为 channel-level 实际值.
+CATEGORY_HORIZONTAL_RATIO = {
+    "ASMR":                                 50,
+    "Autos & Vehicles / 汽车":              90,
+    "Comedy / 喜剧":                        75,
+    "Education / 教育":                     90,
+    "Entertainment / 娱乐":                 85,
+    "Family / 家庭":                        65,
+    "Film & Animation / 影视动画":          95,
+    "Food / 美食":                          75,
+    "Gaming / 游戏":                        95,
+    "Howto & Style / 生活时尚":             70,
+    "Music / 音乐":                         60,
+    "News & Politics / 新闻与政治":         85,
+    "Nonprofits & Activism / 公益":         85,
+    "Other / 其他":                         70,
+    "People & Blogs / 人物与博客":          50,
+    "Pets & Animals / 宠物与动物":          75,
+    "Science & Technology / 科技":          90,
+    "Shorts / 短视频":                      5,
+    "Sports / 体育":                        90,
+    "Travel & Events / 旅行":               80,
+    "Null / 未分类":                        50,
 }
 
 
@@ -181,50 +211,33 @@ def score_band(value, thresholds):
 
 def compute_quality_score(merged):
     """
-    merged: 一个 channel 在 4 维度上的合并数据
-    keys: video_cnt, res_1080p, dur_60s, follower, engagement_rate_pct,
-          like_per_100play, avg_play_per_follower, category
+    v2 评分: 10 维加权
+    merged: 一个 channel 的合并数据, 含
+       res_1080p, dur_60s, engagement_rate_pct, video_cnt,
+       follower, like_per_100play,
+       total_play, total_like, total_comment,
+       unified_category (用来推算 horizontal_ratio)
     """
-    weights = {
-        "res": 0.20,
-        "dur": 0.15,
-        "engage": 0.15,
-        "vcnt": 0.10,
-        "follower": 0.10,
-        "like_rate": 0.10,
-        "reach": 0.10,
-        "category": 0.10,
-    }
     parts = {}
-    parts["res"]      = score_band(merged.get("res_1080p"),    [(80, 100), (60, 75), (40, 50)])
-    parts["dur"]      = score_band(merged.get("dur_60s"),       [(70, 100), (50, 75), (30, 50)])
-    parts["engage"]   = score_band(merged.get("engagement_rate_pct"),     [(3, 100), (2, 75), (1, 50)])
-    parts["vcnt"]     = score_band(merged.get("video_cnt"),     [(200, 100), (50, 75), (20, 50)])
-    parts["follower"] = score_band(merged.get("follower"),      [(100000, 100), (10000, 75), (1000, 50)])
-    parts["like_rate"]= score_band(merged.get("like_per_100play"), [(5, 100), (3, 75), (1, 50)])
-    # 触达率: 0.1~3 区间为 100, 超出按距离打折
-    apf = merged.get("avg_play_per_follower")
-    if apf is None:
-        parts["reach"] = 25
-    elif 0.1 <= apf <= 3.0:
-        parts["reach"] = 100
-    elif 0.03 <= apf < 0.1 or 3.0 < apf <= 10:
-        parts["reach"] = 75
-    elif 0 < apf < 0.03 or 10 < apf <= 50:
-        parts["reach"] = 50
-    else:
-        parts["reach"] = 25
-    # 类目偏好
+    parts["res"]       = score_band(merged.get("res_1080p"),    [(80, 100), (60, 75), (40, 50)])
+    parts["dur"]       = score_band(merged.get("dur_60s"),       [(70, 100), (50, 75), (30, 50)])
+    parts["engage"]    = score_band(merged.get("engagement_rate_pct"),     [(3, 100), (2, 75), (1, 50)])
+    parts["vcnt"]      = score_band(merged.get("video_cnt"),     [(200, 100), (50, 75), (20, 50)])
+    parts["like_rate"] = score_band(merged.get("like_per_100play"), [(5, 100), (3, 75), (1, 50)])
+
+    # 横屏比例 (类目估算)
     cat = merged.get("unified_category", "")
-    if cat in HIGH_CATS:
-        parts["category"] = 100
-    elif cat in MID_CATS:
-        parts["category"] = 75
-    elif cat in LOW_CATS:
-        parts["category"] = 50
-    else:
-        parts["category"] = 25
-    total = sum(parts[k] * weights[k] for k in weights)
+    h_ratio = CATEGORY_HORIZONTAL_RATIO.get(cat, 50)
+    merged["horizontal_ratio_est"] = h_ratio
+    parts["horizontal"] = score_band(h_ratio, [(70, 100), (50, 75), (30, 50)])
+
+    # 4 个绝对值维度
+    parts["play_abs"]     = score_band(merged.get("total_play"),    [(1_000_000_000, 100), (100_000_000, 75), (10_000_000, 50)])
+    parts["like_abs"]     = score_band(merged.get("total_like"),    [(50_000_000, 100), (5_000_000, 75), (500_000, 50)])
+    parts["comment_abs"]  = score_band(merged.get("total_comment"), [(1_000_000, 100), (100_000, 75), (10_000, 50)])
+    parts["follower_abs"] = score_band(merged.get("follower"),      [(50_000_000, 100), (10_000_000, 75), (1_000_000, 50)])
+
+    total = sum(parts[k] * WEIGHTS_V2[k] for k in WEIGHTS_V2)
     return round(total, 2), parts
 
 
@@ -262,6 +275,7 @@ for dim in ("play", "like", "comment", "follower"):
                 "score": score,
                 "parts": parts,
                 "res_1080p": merged.get("res_1080p"),
+                "horizontal_ratio_est": merged.get("horizontal_ratio_est"),
                 "dur_60s": merged.get("dur_60s"),
                 "video_cnt": merged.get("video_cnt"),
                 "follower": merged.get("follower"),
@@ -269,6 +283,8 @@ for dim in ("play", "like", "comment", "follower"):
                 "like_per_100play": merged.get("like_per_100play"),
                 "avg_play_per_follower": merged.get("avg_play_per_follower"),
                 "total_play": merged.get("total_play"),
+                "total_like": merged.get("total_like"),
+                "total_comment": merged.get("total_comment"),
             })
 
 quality_scores.sort(key=lambda x: -x["score"])
@@ -387,6 +403,9 @@ for q in quality_scores[:50]:
         "like_per_100play": q["like_per_100play"],
         "apf": q["avg_play_per_follower"],
         "total_play": q["total_play"],
+        "total_like": q.get("total_like"),
+        "total_comment": q.get("total_comment"),
+        "horizontal_ratio_est": q.get("horizontal_ratio_est"),
         "parts": q["parts"],
     }
     out.append(f"  {js_repr(line)},")
@@ -413,6 +432,9 @@ for cat in sorted(quality_by_cat.keys()):
             "like_per_100play": q["like_per_100play"],
             "apf": q["avg_play_per_follower"],
             "total_play": q["total_play"],
+            "total_like": q.get("total_like"),
+            "total_comment": q.get("total_comment"),
+            "horizontal_ratio_est": q.get("horizontal_ratio_est"),
             "parts": q["parts"],
         }
         out.append(f"    {js_repr(line)},")

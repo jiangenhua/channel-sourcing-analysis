@@ -266,7 +266,32 @@ function followerHealthLabel(v) {
   return `<span class="text-rose-300 font-mono">${pct} 沉淀</span>`;
 }
 
-// 粗暴打分: 与 Python parser 中的 compute_quality_score 一致 (S=100/A=75/B=50/C=25 × 权重)
+// 类目级横屏比例估算 (与 scripts/parse_top20.py 的 CATEGORY_HORIZONTAL_RATIO 保持一致)
+const CATEGORY_HORIZONTAL_RATIO = {
+  'ASMR': 50,
+  'Autos & Vehicles / 汽车': 90,
+  'Comedy / 喜剧': 75,
+  'Education / 教育': 90,
+  'Entertainment / 娱乐': 85,
+  'Family / 家庭': 65,
+  'Film & Animation / 影视动画': 95,
+  'Food / 美食': 75,
+  'Gaming / 游戏': 95,
+  'Howto & Style / 生活时尚': 70,
+  'Music / 音乐': 60,
+  'News & Politics / 新闻与政治': 85,
+  'Nonprofits & Activism / 公益': 85,
+  'Other / 其他': 70,
+  'People & Blogs / 人物与博客': 50,
+  'Pets & Animals / 宠物与动物': 75,
+  'Science & Technology / 科技': 90,
+  'Shorts / 短视频': 5,
+  'Sports / 体育': 90,
+  'Travel & Events / 旅行': 80,
+  'Null / 未分类': 50,
+};
+
+// v2 评分: 10 维加权, 与 scripts/parse_top20.py 的 compute_quality_score 保持一致
 function computeQuickScore(r) {
   const band = (v, sThr, aThr, bThr) => {
     if (v == null) return 25;
@@ -275,31 +300,24 @@ function computeQuickScore(r) {
     if (v >= bThr) return 50;
     return 25;
   };
+  // 横屏比例: 优先用 channel 字段, 否则用 category 估算
+  const hRatio = (r.horizontal_ratio_est != null)
+    ? r.horizontal_ratio_est
+    : (CATEGORY_HORIZONTAL_RATIO[r.category] != null ? CATEGORY_HORIZONTAL_RATIO[r.category] : 50);
+  // 兼容 r.engagement_rate_pct (来自 follower 维) 和 r.engagement (来自 QUALITY_TOP)
+  const engage = r.engagement_rate_pct != null ? r.engagement_rate_pct : r.engagement;
   let s = 0;
-  s += 0.20 * band(r.res_1080p, 80, 60, 40);
-  s += 0.15 * band(r.dur_60s, 70, 50, 30);
-  s += 0.15 * band(r.engagement_rate_pct, 3, 2, 1);
-  s += 0.10 * band(r.video_cnt, 200, 50, 20);
-  s += 0.10 * band(r.follower, 100000, 10000, 1000);
-  s += 0.10 * band(r.like_per_100play, 5, 3, 1);
-  // 触达率: 0.1~3 是健康, 否则按距离扣分
-  const apf = r.avg_play_per_follower;
-  let reach = 25;
-  if (apf == null) reach = 25;
-  else if (apf >= 0.1 && apf <= 3.0) reach = 100;
-  else if ((apf >= 0.03 && apf < 0.1) || (apf > 3.0 && apf <= 10)) reach = 75;
-  else if ((apf > 0 && apf < 0.03) || (apf > 10 && apf <= 50)) reach = 50;
-  s += 0.10 * reach;
-  // 类目偏好
-  const cat = r.category || '';
-  const HIGH = ['Travel', 'Education', 'Sports', 'Autos', 'Pets', 'Howto', 'Science', 'Food', 'Family'];
-  const MID  = ['Entertainment', 'Music', 'Comedy', 'News', 'Nonprofits'];
-  const LOW  = ['People & Blogs', 'Gaming', 'Film & Animation'];
-  let catScore = 25;
-  if (HIGH.some((c) => cat.includes(c))) catScore = 100;
-  else if (MID.some((c) => cat.includes(c))) catScore = 75;
-  else if (LOW.some((c) => cat.includes(c))) catScore = 50;
-  s += 0.10 * catScore;
+  s += 0.20 * band(r.res_1080p,           80, 60, 40);
+  s += 0.10 * band(hRatio,                70, 50, 30);
+  s += 0.15 * band(r.dur_60s,             70, 50, 30);
+  s += 0.15 * band(engage,                 3,  2,  1);
+  s += 0.10 * band(r.video_cnt,          200, 50, 20);
+  s += 0.10 * band(r.like_per_100play,     5,  3,  1);
+  // 4 个绝对值维度
+  s += 0.07 * band(r.total_play,    1e9, 1e8, 1e7);
+  s += 0.06 * band(r.total_like,    5e7, 5e6, 5e5);
+  s += 0.04 * band(r.total_comment, 1e6, 1e5, 1e4);
+  s += 0.03 * band(r.follower,      5e7, 1e7, 1e6);
   return Math.round(s);
 }
 

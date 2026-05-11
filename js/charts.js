@@ -526,7 +526,10 @@ function renderRadarChart() {
   const el = document.getElementById('chart-radar');
   if (!el) return;
   const chart = echarts.init(el);
-  const indicators = QUALITY_DIMENSIONS.map(d => ({ name: d.dim, max: 25 }));
+  // 取最大权重 round 到 5% 的倍数作为 max
+  const maxW = Math.max(...QUALITY_DIMENSIONS.map((d) => d.weight * 100));
+  const radarMax = Math.ceil(maxW / 5) * 5;
+  const indicators = QUALITY_DIMENSIONS.map((d) => ({ name: d.dim, max: radarMax }));
 
   chart.setOption({
     ...BASE_OPT,
@@ -560,7 +563,7 @@ function renderRadarChart() {
 }
 
 // ============ 7. Channel 评分对比 (使用真实 QUALITY_TOP 数据) ============
-// 八个维度的 max 值都是 100 (因为 band 已映射到 S=100 / A=75 / B=50 / C=25)
+// v2: 10 维 (max=100, 因为 band 映射到 S=100 / A=75 / B=50 / C=25)
 function renderChannelRadar(channelName) {
   const el = document.getElementById('chart-channel-radar');
   if (!el) return;
@@ -570,10 +573,16 @@ function renderChannelRadar(channelName) {
   const q = QUALITY_TOP.find((x) => x.channel === channelName);
   if (!q) return null;
 
-  // 8 个维度 (与 QUALITY_DIMENSIONS 一致)
-  const labels = ['分辨率档位', '时长合规', '互动率', '视频量', '粉丝规模', '点赞强度', '粉丝触达率', '类目偏好'];
-  const keys = ['res', 'dur', 'engage', 'vcnt', 'follower', 'like_rate', 'reach', 'category'];
-  const score = keys.map((k) => q.parts[k] || 0);
+  // 10 个维度 (与 QUALITY_DIMENSIONS / parse_top20.py 一致)
+  const labels = [
+    '分辨率档位', '横屏比例', '时长合规', '互动率', '视频量',
+    '点赞强度', '总播放(绝对)', '总点赞(绝对)', '总评论(绝对)', '订阅(绝对)',
+  ];
+  const keys = [
+    'res', 'horizontal', 'dur', 'engage', 'vcnt',
+    'like_rate', 'play_abs', 'like_abs', 'comment_abs', 'follower_abs',
+  ];
+  const score = keys.map((k) => (q.parts && q.parts[k]) || 0);
   const indicators = labels.map((name) => ({ name, max: 100 }));
 
   chart.setOption({
