@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>漫游数据源盘点 · 世界模型 Pretrain Channel 优质寻源</title>
+  <meta name="description" content="基于 22.8 亿条视频元数据的 channel 质量分析、Top20 排行与七维筛选体系" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E📊%3C/text%3E%3C/svg%3E" />
+
+  <!-- ECharts -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <!-- Tailwind (via Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            ink: {
+              50:  '#f5f7fb',
+              100: '#e8edf5',
+              200: '#cdd6e4',
+              300: '#a3b0c7',
+              400: '#7384a3',
+              500: '#52617d',
+              600: '#3d4a63',
+              700: '#2b3447',
+              800: '#1c2435',
+              900: '#11172a',
+              950: '#080d1c',
+            },
+            brand: {
+              50:  '#f0f7ff',
+              100: '#e0eefe',
+              200: '#bbddfd',
+              300: '#7dc0fc',
+              400: '#379ff9',
+              500: '#0e80e5',
+              600: '#0263c2',
+              700: '#02509b',
+              800: '#064378',
+              900: '#0a3a65',
+            },
+          },
+          boxShadow: {
+            glass: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+            soft:  '0 4px 14px 0 rgba(0, 0, 0, 0.08)',
+            glow:  '0 0 24px rgba(56, 189, 248, 0.4)',
+          },
+          animation: {
+            'gradient-x': 'gradient-x 8s ease infinite',
+            'fade-up': 'fade-up 0.7s ease-out',
+          },
+          keyframes: {
+            'gradient-x': {
+              '0%, 100%': { 'background-position': '0% 50%' },
+              '50%':      { 'background-position': '100% 50%' },
+            },
+            'fade-up': {
+              '0%':   { opacity: 0, transform: 'translateY(12px)' },
+              '100%': { opacity: 1, transform: 'translateY(0)' },
+            },
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg-grad: radial-gradient(ellipse at top, #0a3a65 0%, #080d1c 50%, #03060d 100%);
+    }
+    html, body {
+      background: var(--bg-grad);
+      color: #e8edf5;
+      min-height: 100vh;
+      font-feature-settings: "tnum";
+      scroll-behavior: smooth;
+    }
+
+    /* === Glassmorphism cards === */
+    .glass {
+      background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%);
+      backdrop-filter: blur(10px) saturate(120%);
+      -webkit-backdrop-filter: blur(10px) saturate(120%);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+    }
+    .glass-strong {
+      background: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      border: 1px solid rgba(125, 192, 252, 0.15);
+      border-radius: 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+
+    /* === Gradient text === */
+    .gradient-text {
+      background: linear-gradient(90deg, #7dc0fc, #379ff9 30%, #c084fc 60%, #f472b6 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: gradient-x 8s ease infinite;
+    }
+
+    /* === Section spacing === */
+    section { scroll-margin-top: 80px; }
+
+    /* === Tier chips === */
+    .tier-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .tier-high { background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .tier-mid  { background: rgba(234, 179, 8, 0.18); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3); }
+    .tier-low  { background: rgba(248, 113, 113, 0.18); color: #fca5a5; border: 1px solid rgba(248, 113, 113, 0.3); }
+    .tier-noise{ background: rgba(168, 85, 247, 0.18); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3); }
+    .tier-top  { background: linear-gradient(90deg, #f59e0b, #ef4444); color: #fff; }
+
+    /* === Chart container === */
+    .chart {
+      width: 100%;
+      height: 360px;
+    }
+    .chart-tall   { height: 460px; }
+    .chart-short  { height: 280px; }
+    .chart-xtall  { height: 560px; }
+
+    /* === Sidenav === */
+    .nav-link {
+      transition: all 0.2s ease;
+      border-left: 2px solid transparent;
+      padding-left: 12px;
+    }
+    .nav-link:hover {
+      color: #7dc0fc;
+    }
+    .nav-link.active {
+      color: #7dc0fc;
+      border-left-color: #7dc0fc;
+      background: linear-gradient(90deg, rgba(125,192,252,0.08), transparent);
+    }
+
+    /* === Table === */
+    table.data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+    table.data-table th {
+      position: sticky;
+      top: 0;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(4px);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #a3b0c7;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    table.data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #cdd6e4;
+    }
+    table.data-table tr:hover td {
+      background: rgba(125, 192, 252, 0.05);
+      color: #fff;
+    }
+    table.data-table td.num {
+      font-family: 'JetBrains Mono', monospace;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* === Quality score bar === */
+    .qbar {
+      display: inline-block;
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #4ade80, #facc15, #f87171);
+      vertical-align: middle;
+    }
+
+    /* === Custom scrollbar === */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0); }
+    ::-webkit-scrollbar-thumb { background: rgba(125, 192, 252, 0.2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(125, 192, 252, 0.35); }
+
+    /* === Hero decorations === */
+    .hero-blob {
+      position: absolute;
+      pointer-events: none;
+      filter: blur(80px);
+      opacity: 0.4;
+      z-index: 0;
+    }
+    .blob-1 { top: -10%; left: 10%;  width: 380px; height: 380px; background: #0e80e5; }
+    .blob-2 { top: 20%;  right: 5%;  width: 460px; height: 460px; background: #c084fc; }
+    .blob-3 { bottom: 0; left: 35%; width: 340px; height: 340px; background: #f472b6; }
+
+    /* === Funnel custom === */
+    .funnel-step {
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .funnel-step:hover {
+      transform: translateX(4px);
+      box-shadow: 0 0 20px rgba(125, 192, 252, 0.2);
+    }
+
+    /* === Number count up styling === */
+    .kpi-num {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+
+    /* Footer pulse */
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 10px #4ade80;
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <!-- ============ Hero decorations ============ -->
+  <div class="hero-blob blob-1"></div>
+  <div class="hero-blob blob-2"></div>
+  <div class="hero-blob blob-3"></div>
+
+  <!-- ============ Sticky Top Bar ============ -->
+  <header class="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-ink-950/70 border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-lg">📊</div>
+        <div>
+          <div class="text-sm font-semibold text-white">漫游数据源盘点</div>
+          <div class="text-xs text-ink-400">Channel Sourcing · for World Model Pretrain</div>
+        </div>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 text-sm">
+        <a href="#overview"   class="px-3 py-1.5 hover:text-brand-300 transition">概览</a>
+        <a href="#dist"       class="px-3 py-1.5 hover:text-brand-300 transition">分布</a>
+        <a href="#category"   class="px-3 py-1.5 hover:text-brand-300 transition">类目</a>
+        <a href="#engagement" class="px-3 py-1.5 hover:text-brand-300 transition">互动</a>
+        <a href="#top"        class="px-3 py-1.5 hover:text-brand-300 transition">Top 榜</a>
+        <a href="#scoring"    class="px-3 py-1.5 hover:text-brand-300 transition">质量评分</a>
+        <a href="#funnel"     class="px-3 py-1.5 hover:text-brand-300 transition">筛选漏斗</a>
+        <a href="#recommend"  class="px-3 py-1.5 hover:text-brand-300 transition">维度建议</a>
+      </nav>
+      <div class="flex items-center gap-3">
+        <span class="pulse-dot"></span>
+        <span class="text-xs text-ink-300">数据更新于 2026-03-28</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ Main ============ -->
+  <main class="max-w-7xl mx-auto px-6 pt-24 pb-16 relative z-10">
+
+    <!-- ====================== HERO ====================== -->
+    <section id="overview" class="mb-16 animate-fade-up">
+      <div class="flex flex-col gap-6 items-start">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-400/30 text-xs text-brand-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-300"></span>
+          World Model Pretrain · Channel Quality Sourcing
+        </div>
+        <h1 class="text-4xl md:text-6xl font-bold leading-tight">
+          从 <span class="gradient-text">22.86 亿</span> 条原始视频<br/>
+          筛出 <span class="gradient-text">8,424 个</span> 优质 Channel
+        </h1>
+        <p class="text-ink-200 text-lg max-w-3xl leading-relaxed">
+          基于 <code class="text-brand-300 px-1.5 py-0.5 rounded bg-brand-500/10 text-sm">dwd_hy_video_raw_acquire_data_hi</code> 的全量盘点,
+          覆盖 YouTube + Bilibili 共 <strong class="text-white">7020 万</strong> 个 author. 我们构建了「分辨率 × 时长 × 互动 × 类目 × 触达 × 粉丝 × 稳定性」<strong class="text-brand-300">七维筛选体系</strong>,
+          为世界模型 pretrain 提供 S/A 级 channel 数据池.
+        </p>
+      </div>
+
+      <!-- KPI Cards -->
+      <div id="kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8"></div>
+    </section>
+
+    <!-- ====================== Distribution ====================== -->
+    <section id="dist" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">数据分布 · Data Distribution</div>
+          <h2 class="text-2xl font-bold text-white">视频元信息全景</h2>
+        </div>
+        <div class="text-xs text-ink-400">单位: 视频条数</div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- 时长分布 -->
+        <div class="glass-strong p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-white text-base">时长分布 (duration)</h3>
+            <div class="text-xs text-ink-300">
+              世界模型友好区间:
+              <span class="text-emerald-300 font-mono ml-1">1-10min ≈ 30.92%</span>
+            </div>
+          </div>
+          <div id="chart-duration" class="chart"></div>
+        </div>
+
+        <!-- 分辨率方向 + 档位 -->
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">分辨率方向 / 档位</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <div id="chart-orientation" class="chart chart-short"></div>
+            <div id="chart-restier"     class="chart chart-short"></div>
+          </div>
+          <div class="text-xs text-ink-300 mt-2">
+            ▸ 横屏 + 1080p+ 是 pretrain 主力 (≈ 53.43%) · 720p 以下应直接过滤 (7.27%)
+          </div>
+        </div>
+
+        <!-- 分辨率详情 -->
+        <div class="glass-strong p-5 lg:col-span-2">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-white text-base">Top 15 常见分辨率</h3>
+            <div class="text-xs text-ink-300">仅展示占比 > 0.1% 的分辨率</div>
+          </div>
+          <div id="chart-resolution" class="chart"></div>
+        </div>
+
+        <!-- 帧率 -->
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">帧率分布 (frame_rate)</h3>
+          <div id="chart-framerate" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">
+            ▸ <strong class="text-emerald-300">30/24/60 fps</strong> 合计 91.71%, 其余多为异常采集, 建议直接过滤
+          </div>
+        </div>
+
+        <!-- channel 来源 -->
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">站点来源 (site)</h3>
+          <div id="chart-source" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">
+            ▸ YouTube 占绝对主力 (98.55%), Bilibili 1.38%, 但 B 站独有 <strong class="text-brand-300">弹幕/投币/分享</strong> 等强信号
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Category ====================== -->
+    <section id="category" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">类目分析 · Category Analysis</div>
+          <h2 class="text-2xl font-bold text-white">unified_category 分布与质量分级</h2>
+        </div>
+        <div class="text-xs text-ink-400">
+          <span class="tier-pill tier-high mr-1">高质量 ★</span>
+          <span class="tier-pill tier-mid mr-1">中等</span>
+          <span class="tier-pill tier-low mr-1">低优先</span>
+        </div>
+      </div>
+
+      <div class="glass-strong p-5 mb-5">
+        <div id="chart-category" class="chart chart-xtall"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="glass-strong p-5">
+          <div class="text-xs text-ink-300 mb-1">⚠️ 主噪声源</div>
+          <h4 class="font-bold text-white text-lg">People &amp; Blogs 占 47.65%</h4>
+          <p class="text-sm text-ink-200 mt-2 leading-relaxed">
+            该类目近一半视频质量良莠不齐, 需要二次过滤. 建议引入「场景多样性 + 物体识别置信度」做内部分级.
+          </p>
+        </div>
+        <div class="glass-strong p-5">
+          <div class="text-xs text-ink-300 mb-1">⭐ 强推荐类目</div>
+          <h4 class="font-bold text-white text-lg">Travel / Edu / Sports / Sci</h4>
+          <p class="text-sm text-ink-200 mt-2 leading-relaxed">
+            真实世界 + 高动态 + 信息密度高. 占比合计仅 10.83%, 但单位 channel 平均质量明显领先, ROI 最高.
+          </p>
+        </div>
+        <div class="glass-strong p-5">
+          <div class="text-xs text-ink-300 mb-1">🚫 慎用类目</div>
+          <h4 class="font-bold text-white text-lg">Gaming + Film &amp; Animation</h4>
+          <p class="text-sm text-ink-200 mt-2 leading-relaxed">
+            屏幕录制 / 动画为主 (合计 10.3%), 不利于「真实物理 + 真实场景」世界模型学习, 应整类降权.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Engagement ====================== -->
+    <section id="engagement" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">互动指标 · Engagement Metrics</div>
+          <h2 class="text-2xl font-bold text-white">播放 · 点赞 · 评论 · 订阅 全景分布</h2>
+        </div>
+        <div class="text-xs text-ink-400">长尾极重 → 大多数视频质量低于平均</div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">
+            播放数分布 <span class="text-xs text-ink-400 ml-1">(play_num)</span>
+          </h3>
+          <div id="chart-play" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">▸ <strong class="text-amber-300">< 1K</strong> 播放占 53.97% · 仅 3.6% 视频突破 10 万播放</div>
+        </div>
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">
+            点赞分布 <span class="text-xs text-ink-400 ml-1">(like_num)</span>
+          </h3>
+          <div id="chart-like" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">▸ 74.13% 视频 < 100 点赞, 长尾极度倾斜, 需要按 channel 而非按视频抽样</div>
+        </div>
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">
+            评论分布 <span class="text-xs text-ink-400 ml-1">(comment_num)</span>
+          </h3>
+          <div id="chart-comment" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">▸ 1K+ 桶 46.09% 异常高: SQL CASE 默认分支吞了 NULL, 需修正口径</div>
+        </div>
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">
+            订阅分布 <span class="text-xs text-ink-400 ml-1">(channel_follower_count)</span>
+          </h3>
+          <div id="chart-follower" class="chart"></div>
+          <div class="text-xs text-ink-300 mt-2">▸ 13.98% channel 拥有 ≥ 100K 粉丝, 是头部行业 KOL 范围</div>
+        </div>
+      </div>
+
+      <!-- Engagement heatmap by category -->
+      <div class="glass-strong p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white text-base">分类目互动率热力图</h3>
+          <div class="text-xs text-ink-300">单位: %, 越高越粘性 (含 NULL 噪声)</div>
+        </div>
+        <div id="chart-engagement-heatmap" class="chart chart-tall"></div>
+      </div>
+    </section>
+
+    <!-- ====================== TOP CHANNELS ====================== -->
+    <section id="top" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Top 榜单 · By Dimension × Category</div>
+          <h2 class="text-2xl font-bold text-white">各类目 Top Channel 排行</h2>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <div class="text-ink-300">按维度切换:</div>
+          <div id="top-dim-tabs" class="flex bg-ink-800/60 rounded-lg p-1 border border-white/5">
+            <button data-dim="play"       class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition active">总播放</button>
+            <button data-dim="engagement" class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">点赞率</button>
+            <button data-dim="comment"    class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">评论率</button>
+            <button data-dim="follower"   class="dim-tab px-3 py-1.5 rounded-md text-xs font-medium transition">粉丝量</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category filter -->
+      <div class="glass-strong p-3 mb-3">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-ink-300 mr-1">筛选类目:</span>
+          <div id="cat-filter" class="flex flex-wrap gap-1.5"></div>
+        </div>
+      </div>
+
+      <!-- TOP Table -->
+      <div class="glass-strong overflow-hidden">
+        <div class="overflow-x-auto max-h-[640px] overflow-y-auto">
+          <table class="data-table" id="top-table">
+            <thead id="top-thead"></thead>
+            <tbody id="top-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- channel scatter -->
+      <div class="glass-strong p-5 mt-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white text-base">Channel 规模 vs 总播放 (精品 vs 大水号)</h3>
+          <div class="text-xs text-ink-300">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 mr-1"></span>精品 channel
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-400 mr-1 ml-3"></span>大水号
+          </div>
+        </div>
+        <div id="chart-scatter" class="chart chart-tall"></div>
+        <div class="text-xs text-ink-300 mt-2">
+          ▸ 横轴 = 单 channel 视频数, 纵轴 = 总播放. 左上区域 (少而精) 为优选 channel 特征.
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Quality Scoring ====================== -->
+    <section id="scoring" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">质量评分 · Scoring Rubric</div>
+          <h2 class="text-2xl font-bold text-white">七维 Channel 质量评分体系</h2>
+        </div>
+        <div class="text-xs text-ink-400">采用 S / A / B / C 四档分级</div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <div class="glass-strong p-5 lg:col-span-2">
+          <h3 class="font-semibold text-white text-base mb-3">维度权重 (雷达图)</h3>
+          <div id="chart-radar" class="chart chart-tall"></div>
+          <div class="text-xs text-ink-300 mt-2 leading-relaxed">
+            ▸ 七个维度合计权重 100%, 其中 <strong class="text-brand-300">分辨率档位 (20%)</strong> 占最高,
+            因为它直接决定了世界模型输出上限.
+          </div>
+        </div>
+        <div class="glass-strong p-5 lg:col-span-3">
+          <h3 class="font-semibold text-white text-base mb-3">维度阈值表 (S/A/B/C)</h3>
+          <div class="overflow-x-auto">
+            <table class="data-table" id="rubric-table">
+              <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>字段</th>
+                  <th>S 级</th>
+                  <th>A 级</th>
+                  <th>B 级</th>
+                  <th>C 级</th>
+                  <th class="num">权重</th>
+                </tr>
+              </thead>
+              <tbody id="rubric-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sample channel score -->
+      <div class="glass-strong p-5 mt-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white text-base">示例 channel 评分对比 (从 Top20 中选取)</h3>
+          <select id="channel-select" class="bg-ink-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-400"></select>
+        </div>
+        <div id="chart-channel-radar" class="chart chart-tall"></div>
+      </div>
+    </section>
+
+    <!-- ====================== Funnel ====================== -->
+    <section id="funnel" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">筛选漏斗 · Filtering Funnel</div>
+          <h2 class="text-2xl font-bold text-white">22.86 亿 → 8,424 优质 channel</h2>
+        </div>
+        <div class="text-xs text-ink-400">数据量 / channel 数 双视角</div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="glass-strong p-5 lg:col-span-2">
+          <div id="funnel-list" class="space-y-2"></div>
+        </div>
+        <div class="glass-strong p-5">
+          <h3 class="font-semibold text-white text-base mb-3">关键 SQL 落地</h3>
+          <pre class="text-xs leading-relaxed text-ink-200 font-mono overflow-x-auto bg-black/30 p-3 rounded-lg border border-white/5"><span class="text-pink-400">WITH</span> channel_stats <span class="text-pink-400">AS</span> (
+  <span class="text-pink-400">SELECT</span>
+    author,
+    unified_category,
+    COUNT(*) <span class="text-pink-400">AS</span> video_cnt,
+    SUM(play_num) <span class="text-pink-400">AS</span> total_play,
+    AVG(CAST(width&gt;=1920 <span class="text-pink-400">AS</span> INT))*100
+      <span class="text-pink-400">AS</span> res_1080p_pct,
+    AVG(CAST(duration&gt;=60 <span class="text-pink-400">AS</span> INT))*100
+      <span class="text-pink-400">AS</span> dur_60s_pct,
+    (SUM(like_num)+SUM(comment_num))*100.0
+      / NULLIF(SUM(play_num),0)
+      <span class="text-pink-400">AS</span> engagement_pct,
+    MAX(channel_follower_count) <span class="text-pink-400">AS</span> follower
+  <span class="text-pink-400">FROM</span> base
+  <span class="text-pink-400">GROUP BY</span> author, unified_category
+)
+<span class="text-pink-400">SELECT</span> *
+<span class="text-pink-400">FROM</span> channel_stats
+<span class="text-pink-400">WHERE</span> video_cnt &gt;= 50
+  <span class="text-pink-400">AND</span> res_1080p_pct &gt;= 60
+  <span class="text-pink-400">AND</span> dur_60s_pct  &gt;= 50
+  <span class="text-pink-400">AND</span> engagement_pct &gt;= 2
+  <span class="text-pink-400">AND</span> follower &gt;= 10000
+  <span class="text-pink-400">AND</span> unified_category <span class="text-pink-400">IN</span> (
+    <span class="text-emerald-300">'Travel & Events'</span>,
+    <span class="text-emerald-300">'Education'</span>,
+    <span class="text-emerald-300">'Sports'</span>,
+    <span class="text-emerald-300">'Autos &amp; Vehicles'</span>,
+    <span class="text-emerald-300">'Pets &amp; Animals'</span>,
+    <span class="text-emerald-300">'Howto &amp; Style'</span>,
+    <span class="text-emerald-300">'Science &amp; Technology'</span>,
+    <span class="text-emerald-300">'Food'</span>,
+    <span class="text-emerald-300">'Family'</span>
+  )
+<span class="text-pink-400">ORDER BY</span> total_play <span class="text-pink-400">DESC</span>;</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Recommended Dimensions ====================== -->
+    <section id="recommend" class="mb-16">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">新维度建议 · New Filtering Dimensions</div>
+          <h2 class="text-2xl font-bold text-white">基于 CSV 样本可立即落地的扩展维度</h2>
+        </div>
+        <div class="text-xs text-ink-400">来源: requirement_info / data_result 等字段</div>
+      </div>
+
+      <div id="recommend-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+    </section>
+
+    <!-- ====================== Conclusion ====================== -->
+    <section id="conclusion" class="mb-8">
+      <div class="glass-strong p-7 relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-64 h-64 bg-gradient-to-br from-brand-500 to-purple-500 opacity-10 rounded-full blur-3xl"></div>
+        <h2 class="text-2xl font-bold text-white mb-5">核心结论与下一步</h2>
+        <div class="grid md:grid-cols-3 gap-5 relative">
+          <div>
+            <div class="text-3xl font-bold gradient-text mb-2">3 类</div>
+            <div class="font-semibold text-white text-base mb-1">必过滤的低质量数据源</div>
+            <ul class="text-sm text-ink-200 space-y-1 mt-2">
+              <li>· 时长 &lt; 30s 的 Shorts 内容 (38%)</li>
+              <li>· 分辨率 &lt; 720p 的低清视频 (7%)</li>
+              <li>· Gaming / Film&amp;Animation 屏幕录制 (10%)</li>
+            </ul>
+          </div>
+          <div>
+            <div class="text-3xl font-bold gradient-text mb-2">9 类</div>
+            <div class="font-semibold text-white text-base mb-1">推荐优先采集的类目</div>
+            <ul class="text-sm text-ink-200 space-y-1 mt-2">
+              <li>· Travel · Education · Sports</li>
+              <li>· Autos · Pets · Howto · Sci · Food · Family</li>
+            </ul>
+          </div>
+          <div>
+            <div class="text-3xl font-bold gradient-text mb-2">7 维</div>
+            <div class="font-semibold text-white text-base mb-1">扩展打分维度</div>
+            <ul class="text-sm text-ink-200 space-y-1 mt-2">
+              <li>· 码率 / AIGC / 字幕完整度</li>
+              <li>· 更新频率 / channel 寿命 / 近期活跃</li>
+              <li>· 真实世界占比 (排除游戏/动画)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="border-t border-white/5 pt-5 mt-6">
+          <div class="text-sm text-ink-200 leading-relaxed">
+            <strong class="text-brand-300">收益预估:</strong> 经七维筛选后, channel 数从 ≈ 168 万降到 <strong class="text-white">8,424</strong> 个 (0.5%);
+            但保留视频量约 <strong class="text-white">3,000 万条</strong>, 平均单 channel 视频数 <strong class="text-white">3,560 条</strong>,
+            质量&amp;数量都满足世界模型 pretrain 的"少而精"需求.
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ Footer ============ -->
+  <footer class="border-t border-white/5 py-8 text-center text-xs text-ink-400">
+    <div class="max-w-7xl mx-auto px-6">
+      <div>漫游数据源盘点 · Channel Sourcing for World Model Pretrain</div>
+      <div class="mt-1">
+        Powered by <a href="https://echarts.apache.org" target="_blank" class="text-brand-300 hover:underline">Apache ECharts</a>
+        · Built with <a href="https://tailwindcss.com" target="_blank" class="text-brand-300 hover:underline">Tailwind CSS</a>
+        · Source on <a href="https://github.com/jiangenhua" target="_blank" class="text-brand-300 hover:underline">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============ Data + App ============ -->
+  <script src="assets/data.js"></script>
+  <script src="assets/data-top20.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
