@@ -413,7 +413,7 @@ function escapeAttr(s) {
     .replace(/"/g, '&quot;');
 }
 
-// ============ 新增: 跨类目 Top20 覆盖警告 ============
+// ============ 跨类目 Top20 覆盖警告 + 候选池大小填充 ============
 function renderCrossCatCoverageWarning() {
   const top20 = QUALITY_TOP.slice(0, 20);
   const covered = new Set(top20.map((r) => r.category));
@@ -432,9 +432,16 @@ function renderCrossCatCoverageWarning() {
       ? '<em>无</em>'
       : missing.map((c) => `<span class="font-mono text-amber-200">${c}</span>`).join(' · ');
   }
+
+  // 填充质量候选池大小 (Top20 / Top100 都用 QUALITY_TOP_BY_CAT 求和)
+  const poolEl = document.getElementById('quality-pool-size');
+  if (poolEl) {
+    const total = Object.values(QUALITY_TOP_BY_CAT || {}).reduce((s, arr) => s + arr.length, 0);
+    poolEl.textContent = total.toLocaleString();
+  }
 }
 
-// ============ 新增: 各类目质量分 Top 20 ============
+// ============ 各类目质量分 Top 100 (v2: 从 Top 20 扩到 Top 100) ============
 let currentQualityCat = null;
 
 function initCatQualitySelect() {
@@ -455,9 +462,8 @@ function initCatQualitySelect() {
 
   sel.innerHTML = cats.map((c) => {
     const mark = crossCovered.has(c.cat) ? '✓' : '◆';
-    const cls = crossCovered.has(c.cat) ? 'text-ink-300' : 'text-amber-300';
     return `<option value="${c.cat}" data-covered="${crossCovered.has(c.cat) ? 1 : 0}">
-      ${mark} ${c.cat} · Top1=${c.top1.toFixed(1)} · ${c.count} 个
+      ${mark} ${c.cat} · Top1=${c.top1.toFixed(1)} · ${c.count} 个候选
     </option>`;
   }).join('');
   sel.value = defaultCat;

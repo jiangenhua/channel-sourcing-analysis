@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """
-解析 4 个 Top20 txt 文件 -> 输出 assets/data-top20.js (全量 19 类 × 20 channel × 4 维度)
+解析 4 个 Top100 txt 文件 -> 输出 assets/data-top20.js
+(v2: 数据源从 "7、" 目录的 Top20 升级到 "8、" 目录的 Top100, 文件路径硬编码切换)
+
+注意: 输出文件名仍叫 data-top20.js 以保持向后兼容, 但内部数据是 Top100.
+JS 端的 QUALITY_TOP_BY_CAT[cat] 现在每个类目最多 100 行, 跨类目 QUALITY_TOP
+取前 50 个不变 (因为前端 Top 总榜只展示前 20).
 """
 import json
 import os
 import re
 import sys
 
-SRC = "/Users/ehjiang/Desktop/漫游数据源盘点/7、各obj_category下的各维度（播放、点赞、评论、订阅）top20的uploader统计分布"
+# v2: 切到 Top100 数据目录
+SRC = "/Users/ehjiang/Desktop/漫游数据源盘点/8、各obj_category下的各维度（播放、点赞、评论、订阅）top20的uploader统计分布"
 OUT = "/Users/ehjiang/Desktop/channel-sourcing-analysis/assets/data-top20.js"
 
 FILES = {
-    "play":       "a)play_num Top20 uploader.txt",
-    "like":       "b)like_num Top20 uploader.txt",
-    "comment":    "c)comment_num Top20 uploader.txt",
-    "follower":   "d)follower Top20 uploader.txt",
+    "play":       "a)play_num Top100 uploader.txt",
+    "like":       "b)like_num Top100 uploader.txt",
+    "comment":    "c)comment_num Top100 uploader.txt",
+    "follower":   "d)follower Top100 uploader.txt",
 }
 
 # 列名 (从原 txt 文件首行解析得到)
@@ -293,14 +299,15 @@ print(f"Top 20 by quality score:")
 for i, q in enumerate(quality_scores[:20], 1):
     print(f"  #{i} {q['score']:.1f}  {q['category'][:30]:30s}  {q['channel']}")
 
-# 按类目分组的质量分 Top 20
+# 按类目分组的质量分 Top 100 (v2: 从 20 扩到 100)
+PER_CAT_LIMIT = 100
 quality_by_cat = {}
 for q in quality_scores:
     cat = q["category"]
     quality_by_cat.setdefault(cat, []).append(q)
 for cat in quality_by_cat:
     quality_by_cat[cat].sort(key=lambda x: -x["score"])
-    quality_by_cat[cat] = quality_by_cat[cat][:20]
+    quality_by_cat[cat] = quality_by_cat[cat][:PER_CAT_LIMIT]
 
 print(f"\n各类目候选 channel 数:")
 for cat in sorted(quality_by_cat.keys()):
@@ -385,11 +392,11 @@ out.append(dump_js_block("TOP_BY_FOLLOWER", data["follower"]))
 out.append("")
 
 # QUALITY TOP (cross-category)
-out.append("// ===== E) 综合质量分排行 (跨类目 Top 50) =====")
+out.append("// ===== E) 综合质量分排行 (跨类目 Top 100) =====")
 out.append("// 公式: score = Σ(dim_score_i × weight_i), 各维度分: S=100/A=75/B=50/C=25")
 out.append("// 详见 README/REPORT.md 评分体系章节")
 out.append("const QUALITY_TOP = [")
-for q in quality_scores[:50]:
+for q in quality_scores[:100]:
     line = {
         "rk": quality_scores.index(q) + 1,
         "category": q["category"],

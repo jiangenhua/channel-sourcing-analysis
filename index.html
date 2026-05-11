@@ -778,7 +778,7 @@
           <div class="flex-1">
             <div class="font-semibold text-white text-sm mb-1">交互说明 · Channel 名称可点击查看横屏采样视频</div>
             <div>
-              下方两张 Top 20 表格中, 凡是带
+              下方两张 Top 榜单 表格中, 凡是带
               <span class="channel-link inline-block px-1.5 py-0 align-baseline">示例 channel<span class="sample-badge">10</span></span>
               这种 <strong class="text-brand-300">下划虚线 + 渐变彩色徽章 (数字 = 横屏采样视频数)</strong> 的 channel 名, 点击后会弹出该频道的视频示例 (含标题、URL、<strong class="text-emerald-300">分辨率徽章</strong>、平台标签、跳转按钮);
               带 <span class="channel-no-sample inline-block">未采样 channel</span> 样式的 (灰色斜体 + ⊘ 标记) 表示该 channel 在样本中没有横屏视频 (例如 Shorts/竖屏类目).
@@ -809,7 +809,7 @@
       <div class="glass-strong p-5 mt-5">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold text-white text-base">🏆 质量分 Top 20 总榜单 (跨类目)</h3>
-          <div class="text-xs text-ink-300">基于全部 1,082 个候选 channel 计算</div>
+          <div class="text-xs text-ink-300">基于全部 <span id="quality-pool-size" class="font-mono text-brand-300">—</span> 个候选 channel 计算 · 仅展示前 20</div>
         </div>
         <div class="overflow-x-auto max-h-[560px] overflow-y-auto">
           <table class="data-table" id="quality-top-table">
@@ -836,16 +836,16 @@
           跨类目 Top 20 只覆盖了 <strong id="cross-cat-coverage">—</strong> 个类目,
           其余 <strong id="cross-cat-missing-count">—</strong> 个类目 (含
           <span id="cross-cat-missing-names">—</span>) 由于头部 channel 综合分相对较低, 没有出现在跨类目总榜中.
-          请向下查看「各类目内部 Top 20」, 避免整类被遗漏.
+          请向下查看「各类目内部 Top 100」, 避免整类被遗漏.
         </div>
       </div>
 
-      <!-- 📊 各类目质量分 Top 20 (NEW) -->
+      <!-- 📊 各类目质量分 Top 100 (v2: 从 Top 20 扩到 Top 100) -->
       <div class="glass-strong p-5 mt-5">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
-            <h3 class="font-semibold text-white text-base">📊 各类目质量分 Top 20</h3>
-            <div class="text-xs text-ink-300 mt-0.5">确保 20 个 unified_category 都有独立 Top 20 展示, 避免整类被忽略</div>
+            <h3 class="font-semibold text-white text-base">📊 各类目质量分 Top 100</h3>
+            <div class="text-xs text-ink-300 mt-0.5">每个 unified_category 独立展示 Top 100 候选 (ASMR 因总样本不足仅 3 个)</div>
           </div>
           <div class="flex items-center gap-2 text-xs">
             <span class="text-ink-300">类目:</span>
@@ -894,7 +894,7 @@
       <div class="flex items-end justify-between mb-5">
         <div>
           <div class="text-xs text-brand-300 mb-1 uppercase tracking-wider">Top 榜单 · By Dimension × Category</div>
-          <h2 class="text-2xl font-bold text-white">各类目 Top 20 Channel 排行</h2>
+          <h2 class="text-2xl font-bold text-white">各类目 Top 100 Channel 排行</h2>
         </div>
         <div class="flex items-center gap-2 text-xs">
           <div class="text-ink-300">按维度切换:</div>
@@ -908,7 +908,7 @@
       </div>
 
       <div class="text-xs text-ink-300 mb-3">
-        ▸ 覆盖 <strong class="text-brand-300" id="top-cat-count">19</strong> 个 unified_category, 每个类目 Top 20
+        ▸ 覆盖 <strong class="text-brand-300" id="top-cat-count">20</strong> 个 unified_category, 每个类目最多 Top 100
         · 共 <strong class="text-brand-300" id="top-channel-count">—</strong> 行
       </div>
 
@@ -1140,10 +1140,10 @@
   </div>
 
   <!-- ============ Data + App ============ -->
-  <script src="assets/data.js?v=20260511g"></script>
-  <script src="assets/data-top20.js?v=20260511g"></script>
-  <script src="assets/sample-videos.js?v=20260511g"></script>
-  <script src="js/charts.js?v=20260511g"></script>
-  <script src="js/app.js?v=20260511g"></script>
+  <script src="assets/data.js?v=20260511h"></script>
+  <script src="assets/data-top20.js?v=20260511h"></script>
+  <script src="assets/sample-videos.js?v=20260511h"></script>
+  <script src="js/charts.js?v=20260511h"></script>
+  <script src="js/app.js?v=20260511h"></script>
 </body>
 </html>
