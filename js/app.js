@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initCatQualitySelect();
   initChannelRadarSelect();
 
+  // ===== 4.1 采样视频弹窗交互 =====
+  initVideoModal();
+  renderSampleCoverageStats();
+
   // ===== 5. 筛选漏斗 =====
   renderFunnel();
 
@@ -324,9 +328,6 @@ function renderQualityTopTable() {
   // 仅取前 20
   const rows = QUALITY_TOP.slice(0, 20);
   tbody.innerHTML = rows.map((r, i) => {
-    const tier = r.score >= 80 ? 'tier-high' :
-                 r.score >= 60 ? 'tier-mid' :
-                 r.score >= 40 ? 'tier-pill' : 'tier-low';
     const tierLabel = r.score >= 80 ? 'S' : r.score >= 60 ? 'A' : r.score >= 40 ? 'B' : 'C';
     const tierStyle = r.score >= 80
       ? 'background:linear-gradient(90deg,#f59e0b,#ef4444);color:#fff;'
@@ -342,7 +343,7 @@ function renderQualityTopTable() {
     return `<tr>
       <td class="num">${rkBadge}</td>
       <td class="font-semibold">${r.category}</td>
-      <td>${r.channel}</td>
+      <td>${renderChannelCell(r.category, r.channel)}</td>
       <td class="num font-mono font-bold text-brand-300">${r.score.toFixed(1)}</td>
       <td class="num">${r.res_1080p != null ? r.res_1080p.toFixed(1) + '%' : '—'}</td>
       <td class="num">${r.dur_60s != null ? r.dur_60s.toFixed(1) + '%' : '—'}</td>
@@ -353,6 +354,45 @@ function renderQualityTopTable() {
       <td><span class="tier-pill" style="${tierStyle}">${tierLabel} 级</span></td>
     </tr>`;
   }).join('');
+}
+
+// ============ Channel 渲染: 如果该 (cat, channel) 有采样视频, 渲染为可点击链接 ============
+function renderChannelCell(category, channel) {
+  // 容错: SAMPLE_VIDEOS 可能未加载, 函数也可能没定义
+  const samples = (typeof getSampleVideos === 'function')
+    ? getSampleVideos(category, channel)
+    : [];
+  if (!samples || samples.length === 0) {
+    return `<span class="channel-no-sample" title="该 channel 暂无采样视频">${escapeHtml(channel)}</span>`;
+  }
+  const safeChannel = escapeAttr(channel);
+  const safeCat = escapeAttr(category);
+  return `<a class="channel-link" href="#"
+              data-cat="${safeCat}" data-channel="${safeChannel}"
+              title="查看 ${samples.length} 条采样视频"
+              onclick="openVideoModal('${safeCat}','${safeChannel}'); return false;">
+            ${escapeHtml(channel)}
+            <span class="sample-badge">${samples.length}</span>
+          </a>`;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(s) {
+  // for use inside onclick='...' single-quoted args
+  if (s == null) return '';
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
 }
 
 // ============ 新增: 跨类目 Top20 覆盖警告 ============
@@ -478,7 +518,7 @@ function renderCatQualityTable() {
 
     return `<tr>
       <td class="num">${rkBadge}</td>
-      <td>${r.channel}</td>
+      <td>${renderChannelCell(currentQualityCat, r.channel)}</td>
       <td class="num font-mono font-bold text-brand-300">${r.score.toFixed(1)}</td>
       <td class="num">${r.res_1080p != null ? r.res_1080p.toFixed(1) + '%' : '—'}</td>
       <td class="num">${r.dur_60s != null ? r.dur_60s.toFixed(1) + '%' : '—'}</td>
@@ -595,6 +635,119 @@ function renderRecommendDims() {
     </div>
   `).join('');
 }
+
+// =====================================================
+// 6.x 采样视频弹窗 (与 channel 表格联动)
+// =====================================================
+
+function renderSampleCoverageStats() {
+  if (typeof SAMPLE_VIDEOS === 'undefined') return;
+  const keys = Object.keys(SAMPLE_VIDEOS);
+  const channelCount = keys.length;
+  const videoCount = Object.values(SAMPLE_VIDEOS).reduce((s, arr) => s + arr.length, 0);
+  const sampledCats = new Set(keys.map((k) => k.split('|', 1)[0]));
+  const allCats = typeof QUALITY_TOP_BY_CAT !== 'undefined' ? Object.keys(QUALITY_TOP_BY_CAT) : [];
+  const missingCats = allCats.filter((c) => !sampledCats.has(c));
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('sample-coverage-channels', channelCount.toLocaleString());
+  set('sample-coverage-videos', videoCount.toLocaleString());
+  set('sample-coverage-cats', sampledCats.size + ' / ' + allCats.length);
+  set('sample-coverage-missing', missingCats.length);
+  // 把 missing 类目 tooltip 化
+  const missingEl = document.getElementById('sample-coverage-missing');
+  if (missingEl && missingCats.length) {
+    missingEl.parentElement.setAttribute('title', '未采样类目:\n' + missingCats.join('\n'));
+    missingEl.parentElement.style.cursor = 'help';
+  }
+}
+
+function initVideoModal() {
+  const modal = document.getElementById('video-modal');
+  if (!modal) return;
+  const closeBtn  = document.getElementById('video-modal-close');
+  const closeBtn2 = document.getElementById('video-modal-close-2');
+  const backdrop  = document.getElementById('video-modal-backdrop');
+
+  const close = () => {
+    modal.classList.add('hidden');
+    document.documentElement.style.overflow = '';
+  };
+  closeBtn?.addEventListener('click', close);
+  closeBtn2?.addEventListener('click', close);
+  backdrop?.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+  });
+}
+
+// 注意: 此函数被 onclick="openVideoModal(...)" 直接调用, 必须挂到 window
+function openVideoModal(category, channel) {
+  const modal = document.getElementById('video-modal');
+  if (!modal) return;
+
+  const samples = (typeof getSampleVideos === 'function')
+    ? getSampleVideos(category, channel)
+    : [];
+  if (!samples || samples.length === 0) {
+    return;
+  }
+
+  // 填充 header
+  const nameEl = document.getElementById('video-modal-channel');
+  const catEl  = document.getElementById('video-modal-cat');
+  const cntEl  = document.getElementById('video-modal-count');
+  const linkEl = document.getElementById('video-modal-channel-link');
+  const linkElM = document.getElementById('video-modal-channel-link-mobile');
+  if (nameEl) nameEl.textContent = channel;
+  if (catEl)  catEl.textContent  = category;
+  if (cntEl)  cntEl.textContent  = samples.length;
+
+  const channelUrl = samples.find((s) => s.channel_url)?.channel_url;
+  if (linkEl) {
+    if (channelUrl) {
+      linkEl.href = channelUrl;
+      linkEl.classList.remove('hidden');
+    } else {
+      linkEl.classList.add('hidden');
+    }
+  }
+  if (linkElM) {
+    if (channelUrl) {
+      linkElM.href = channelUrl;
+      linkElM.classList.remove('hidden');
+    } else {
+      linkElM.classList.add('hidden');
+    }
+  }
+
+  // 填充列表
+  const list = document.getElementById('video-modal-list');
+  if (list) {
+    list.innerHTML = samples.map((v) => {
+      const title = escapeHtml(v.title || '<未知标题>');
+      const url   = escapeHtml(v.video_url || '#');
+      const rawUrl = v.video_url || '';
+      return `<li class="video-row">
+        <span class="video-rk">${v.rk}</span>
+        <div class="flex-1 min-w-0">
+          <a href="${url}" target="_blank" rel="noopener noreferrer" class="video-title">${title}</a>
+          <div class="video-url">${escapeHtml(rawUrl)}</div>
+        </div>
+        <a href="${url}" target="_blank" rel="noopener noreferrer" class="open-btn" title="新窗口打开">↗</a>
+      </li>`;
+    }).join('');
+    // 滚回顶部
+    list.parentElement.scrollTop = 0;
+  }
+
+  modal.classList.remove('hidden');
+  // 阻止 body 滚动
+  document.documentElement.style.overflow = 'hidden';
+}
+
+// 暴露到全局, 给 inline onclick 用
+window.openVideoModal = openVideoModal;
 
 // =====================================================
 // 7. Scroll spy
